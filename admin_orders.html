@@ -109,10 +109,10 @@
 
   <div id="main-view" class="card" style="display:none;">
     <div class="topbar">
-      <div class="who">登入身分：<span id="who-email"></span></div>
+      <div class="who">登入身分：<span id="who-email"></span>（<span id="who-role"></span>）</div>
       <div>
-        <a href="admin_inventory.html">庫存管理</a>
-        <a href="admin_agents.html">代理人管理</a>
+        <a href="admin_inventory.html" id="inventory-link">庫存管理</a>
+        <a href="admin_agents.html" id="agents-link">代理人管理</a>
         <a href="#" id="logout-link">登出</a>
       </div>
     </div>
@@ -120,7 +120,7 @@
     <p class="sub">共 <span id="order-count">0</span> 筆</p>
 
     <div class="filter-row">
-      <label style="margin:0;">狀態篩選</label>
+      <label id="status-filter-label" style="margin:0;">狀態篩選</label>
       <select id="status-filter">
         <option value="">全部</option>
         <option value="ordered">訂購中</option>
@@ -168,6 +168,7 @@ import {
   getFirestore,
   collectionGroup,
   query,
+  where,
   orderBy,
   getDocs,
   doc,
@@ -200,6 +201,9 @@ const loginPasswordEl = document.getElementById('login-password');
 const loginBtn = document.getElementById('login-btn');
 const loginMsgEl = document.getElementById('login-msg');
 const whoEmailEl = document.getElementById('who-email');
+const whoRoleEl = document.getElementById('who-role');
+const inventoryLinkEl = document.getElementById('inventory-link');
+const agentsLinkEl = document.getElementById('agents-link');
 const logoutLink = document.getElementById('logout-link');
 const statusFilterEl = document.getElementById('status-filter');
 const refreshBtn = document.getElementById('refresh-btn');
@@ -235,6 +239,8 @@ logoutLink.addEventListener('click', async (e) => {
 });
 
 let allOrders = [];
+let currentRole = null;
+let currentCode = null;
 
 function formatTime(ts) {
   if (!ts) return '—';
@@ -262,20 +268,24 @@ function renderRows() {
       <td class="num">NT$ ${(d['總金額'] || 0).toLocaleString()}</td>
       <td>${d['推薦碼'] || '—'} / ${d['售價方案'] || '—'}</td>
       <td>${d['備註'] || ''}</td>
-      <td><span class="badge ${d.status}">${STATUS_LABEL[d.status] || d.status}</span></td>
     `;
+
     const statusCell = document.createElement('td');
-    const select = document.createElement('select');
-    select.className = 'status-select';
-    for (const value of ['ordered', 'confirmed', 'completed', 'cancelled']) {
-      const opt = document.createElement('option');
-      opt.value = value;
-      opt.textContent = STATUS_LABEL[value];
-      if (value === d.status) opt.selected = true;
-      select.appendChild(opt);
+    if (currentRole === 'super_admin') {
+      const select = document.createElement('select');
+      select.className = 'status-select';
+      for (const value of ['ordered', 'confirmed', 'completed', 'cancelled']) {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = STATUS_LABEL[value];
+        if (value === d.status) opt.selected = true;
+        select.appendChild(opt);
+      }
+      select.addEventListener('change', () => changeStatus(order.ref, d, select.value, select));
+      statusCell.appendChild(select);
+    } else {
+      statusCell.innerHTML = `<span class="badge ${d.status}">${STATUS_LABEL[d.status] || d.status}</span>`;
     }
-    select.addEventListener('change', () => changeStatus(order.ref, d, select.value, select));
-    statusCell.appendChild(select);
     tr.appendChild(statusCell);
     orderRowsEl.appendChild(tr);
   }
@@ -332,9 +342,19 @@ async function loadOrders() {
   showMsg('', true);
   msgEl.className = 'msg';
   try {
-    const q = query(collectionGroup(db, 'orders'), orderBy('created_at', 'desc'));
-    const snap = await getDocs(q);
+    let snap;
+    if (currentRole === 'super_admin') {
+      snap = await getDocs(query(collectionGroup(db, 'orders'), orderBy('created_at', 'desc')));
+    } else {
+      // sales/inventory：只查自己推薦碼底下的訂單；不加 orderBy 避免另外需要一個複合索引，改成拿到後在前端排序
+      snap = await getDocs(query(collectionGroup(db, 'orders'), where('推薦碼', '==', currentCode)));
+    }
     allOrders = snap.docs.map((d) => ({ ref: d.ref, data: d.data() }));
+    allOrders.sort((a, b) => {
+      const at = a.data.created_at ? a.data.created_at.toMillis() : 0;
+      const bt = b.data.created_at ? b.data.created_at.toMillis() : 0;
+      return bt - at;
+    });
     renderRows();
   } catch (e) {
     showMsg('讀取訂單失敗', false);
@@ -353,16 +373,23 @@ onAuthStateChanged(authClient, async (user) => {
     return;
   }
   const tokenResult = await user.getIdTokenResult();
-  if (tokenResult.claims.role !== 'super_admin') {
+  const role = tokenResult.claims.role;
+  if (!['super_admin', 'sales', 'inventory'].includes(role)) {
     loginView.style.display = 'none';
     deniedView.style.display = 'block';
     mainView.style.display = 'none';
     return;
   }
+  currentRole = role;
+  currentCode = tokenResult.claims.code || null;
+
   loginView.style.display = 'none';
   deniedView.style.display = 'none';
   mainView.style.display = 'block';
   whoEmailEl.textContent = user.email;
+  whoRoleEl.textContent = { super_admin: 'super_admin', sales: 'sales', inventory: 'inventory' }[role];
+  inventoryLinkEl.style.display = (role === 'super_admin' || role === 'inventory') ? 'inline' : 'none';
+  agentsLinkEl.style.display = role === 'super_admin' ? 'inline' : 'none';
   await loadOrders();
 });
 </script>

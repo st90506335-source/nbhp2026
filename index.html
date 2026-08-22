@@ -349,7 +349,8 @@ function updatePriceSummary(item) {
 }
 
 function updateSubmitState() {
-  const ready = selected && selected.available > 0 && nameEl.value.trim() && phoneEl.value.trim();
+  const ready = selected && selected.available > 0 && nameEl.value.trim() &&
+    normalizePhone(phoneEl.value).length >= 10;
   submitBtn.disabled = !ready;
   submitBtn.textContent = selected && selected.available <= 0 ? '已售完' : '送出訂購';
 }
@@ -414,8 +415,8 @@ submitBtn.addEventListener('click', async () => {
   const machineAmount = priceFor(selected, agent.plan);
   const totalAmount = machineAmount + memoryAmount;
 
-  if (!normalizePhone(phone)) {
-    showMsg('請輸入有效的電話號碼', false);
+  if (normalizePhone(phone).length < 10) {
+    showMsg('請輸入至少 10 碼的手機號碼', false);
     return;
   }
 
