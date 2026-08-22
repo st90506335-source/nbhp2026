@@ -141,6 +141,7 @@
             <th>No./型號</th>
             <th>姓名</th>
             <th>電話</th>
+            <th class="num">機器金額</th>
             <th>記憶體</th>
             <th class="num">總金額</th>
             <th>推薦碼/方案</th>
@@ -264,6 +265,7 @@ function renderRows() {
       <td>No.${d.no}<br>${d.model}</td>
       <td>${d['姓名'] || ''}</td>
       <td>${d['電話'] || ''}</td>
+      <td class="num">NT$ ${(d['機器金額'] || 0).toLocaleString()}</td>
       <td>${memoryLine}</td>
       <td class="num">NT$ ${(d['總金額'] || 0).toLocaleString()}</td>
       <td>${d['推薦碼'] || '—'} / ${d['售價方案'] || '—'}</td>

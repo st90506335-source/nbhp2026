@@ -35,6 +35,7 @@
     max-width: 600px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.06);
   }
+  #main-view { max-width: 900px; }
   .login-card { max-width: 400px; margin-top: 80px; }
   h1 { font-size: 20px; margin: 0 0 4px; }
   .sub { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
@@ -77,6 +78,13 @@
   .result-row.ok { background: #dafbe1; color: var(--ok); }
   .result-row.err { background: #ffebe9; color: var(--err); }
   .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  h2 { font-size: 15px; margin: 28px 0 10px; }
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; }
+  td.num { text-align: right; }
+  td.out { color: var(--err); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -112,6 +120,27 @@
 
   <div id="msg" class="msg"></div>
   <div id="result-list" class="result-list"></div>
+
+  <h2>目前商品清單</h2>
+  <p class="sub">金額欄依你自己的售價方案（<span id="my-plan"></span>）顯示</p>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>No.</th>
+          <th>型號</th>
+          <th class="num">數量</th>
+          <th class="num">記憶體插槽數</th>
+          <th class="num">年份</th>
+          <th class="num">CPU核心數</th>
+          <th class="num">金額</th>
+          <th>適合種類</th>
+          <th class="num">剩餘可訂購</th>
+        </tr>
+      </thead>
+      <tbody id="product-rows"></tbody>
+    </table>
+  </div>
 </div>
 
 <script type="module">
@@ -124,7 +153,10 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import {
   getFirestore,
+  collection,
   doc,
+  getDoc,
+  getDocs,
   runTransaction,
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
@@ -157,6 +189,12 @@ const csvInputEl = document.getElementById('csv-input');
 const applyBtn = document.getElementById('apply-btn');
 const msgEl = document.getElementById('msg');
 const resultListEl = document.getElementById('result-list');
+const myPlanEl = document.getElementById('my-plan');
+const productRowsEl = document.getElementById('product-rows');
+
+const PRICE_FIELD_BY_PLAN = { A: 'price_a', B: 'final_price', C: 'price_c' };
+const categoryLabel = (cats) => (cats && cats.length ? cats.join('、') : '—');
+let myPlan = 'B';
 
 function showMsg(text, ok) {
   msgEl.textContent = text;
@@ -262,6 +300,7 @@ applyBtn.addEventListener('click', async () => {
   }
 
   showMsg(`完成：成功 ${okCount} 行，失敗/擋下 ${errCount} 行`, errCount === 0);
+  await loadProductList(myPlan);
   applyBtn.disabled = false;
 });
 
@@ -283,7 +322,39 @@ onAuthStateChanged(authClient, async (user) => {
   deniedView.style.display = 'none';
   mainView.style.display = 'block';
   whoEmailEl.textContent = user.email;
+
+  const code = tokenResult.claims.code;
+  if (code) {
+    const agentSnap = await getDoc(doc(db, 'hp_agents', code));
+    if (agentSnap.exists()) myPlan = agentSnap.data()['售價方案'] || 'B';
+  }
+  myPlanEl.textContent = myPlan;
+  await loadProductList(myPlan);
 });
+
+async function loadProductList(plan) {
+  const priceField = PRICE_FIELD_BY_PLAN[plan] || 'final_price';
+  const snap = await getDocs(collection(db, 'hp_notebooks'));
+  const items = snap.docs.map((d) => d.data()).sort((a, b) => a.no - b.no);
+
+  productRowsEl.innerHTML = '';
+  for (const item of items) {
+    const tr = document.createElement('tr');
+    const outClass = item.available <= 0 ? 'out' : '';
+    tr.innerHTML = `
+      <td>${item.no}</td>
+      <td>${item.model}</td>
+      <td class="num">${item.quantity ?? '—'}</td>
+      <td class="num">${item.memory_slots ?? '—'}</td>
+      <td class="num">${item.year ?? '—'}</td>
+      <td class="num">${item.cpu_cores ?? '—'}</td>
+      <td class="num">NT$ ${(item[priceField] ?? 0).toLocaleString()}</td>
+      <td>${categoryLabel(item.category)}</td>
+      <td class="num ${outClass}">${item.available}</td>
+    `;
+    productRowsEl.appendChild(tr);
+  }
+}
 </script>
 </body>
 </html>
