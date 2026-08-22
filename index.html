@@ -107,13 +107,78 @@
   .msg.ok { background: #dafbe1; color: var(--ok); }
   .msg.err { background: #ffebe9; color: var(--err); }
   .placeholder { color: var(--muted); font-size: 13px; }
+  .memory-slot-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .memory-slot-row label {
+    margin: 0;
+    font-weight: 400;
+    color: var(--muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .memory-slot-row select { margin: 0; }
+  .price-summary dd.total { color: var(--accent); font-size: 15px; }
+  textarea {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--text);
+    font-family: inherit;
+    resize: vertical;
+    min-height: 60px;
+  }
+  textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .query-link {
+    display: block;
+    text-align: center;
+    margin-top: 20px;
+    font-size: 13px;
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .query-link:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
 <div class="card">
   <h1>HP 筆電出清訂購</h1>
-  <p class="sub">選擇機種後確認庫存與規格，填寫聯絡資訊送出訂購</p>
-
+  <p class="sub ai-style-change-1">
+    <div style="background: #fff4f4; border-left: 4px solid #ef4444; padding: 12px 16px; margin-bottom: 20px; border-radius: 4px; color: #b91c1c; font-weight: 600;">
+      ⚠️ 此網頁請勿廣傳！這裡是僅供認識 Ben 的朋友使用的下單系統
+    </div>
+    <ul style="list-style: none; padding: 0; margin: 0; color: #4b5563; font-size: 14px; line-height: 1.7;">
+      <li style="margin-bottom: 12px; display: flex; align-items: flex-start;">
+        <span style="background: #e5e7eb; color: #374151; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 12px; margin-right: 10px; flex-shrink: 0; margin-top: 2px;">1</span>
+        <span>選擇機種，已售完則不能再選囉！</span>
+      </li>
+      <li style="margin-bottom: 12px; display: flex; align-items: flex-start;">
+        <span style="background: #e5e7eb; color: #374151; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 12px; margin-right: 10px; flex-shrink: 0; margin-top: 2px;">2</span>
+        <span>選擇記憶體：由於最近記憶體飆漲如黃金，採選配方式。建議：<br>
+          • 上網：8GB 足夠<br>
+          • 上網 + 文書：12GB<br>
+          • 上網 + 文書 + 輕量遊戲：16GB 以上
+        </span>
+      </li>
+      <li style="margin-bottom: 12px; display: flex; align-items: flex-start;">
+        <span style="background: #e5e7eb; color: #374151; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 12px; margin-right: 10px; flex-shrink: 0; margin-top: 2px;">3</span>
+        <span>下單後不代表確定買到（庫存變動快），<strong>請務必 Line 我確認</strong>。</span>
+      </li>
+      <li style="margin-bottom: 12px; display: flex; align-items: flex-start;">
+        <span style="background: #e5e7eb; color: #374151; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 12px; margin-right: 10px; flex-shrink: 0; margin-top: 2px;">4</span>
+        <span>訂單保留七天。若狀態未轉為「完成訂購」，七天後將自動取消。</span>
+      </li>
+    </ul>
+  </p>
   <label for="model-select">選擇機種</label>
   <select id="model-select">
     <option value="">請選擇...</option>
@@ -122,15 +187,27 @@
   <div id="details" class="details" style="display:none;"></div>
   <p id="loading" class="placeholder">載入機種資料中...</p>
 
+  <div id="memory-section" style="display:none;">
+    <label>記憶體加購（每個插槽獨立選擇，選填）</label>
+    <div id="memory-slots"></div>
+  </div>
+
+  <div id="price-summary" class="details price-summary" style="display:none;"></div>
+
   <label for="name-input">姓名</label>
   <input id="name-input" type="text" placeholder="請輸入姓名">
 
   <label for="phone-input">電話</label>
   <input id="phone-input" type="tel" placeholder="請輸入電話">
 
+  <label for="note-input">備註</label>
+  <textarea id="note-input" placeholder="選填"></textarea>
+
   <button id="submit-btn" disabled>送出訂購</button>
 
   <div id="msg" class="msg"></div>
+
+  <a class="query-link" href="query.html">查詢我的訂購紀錄</a>
 </div>
 
 <script type="module">
@@ -166,6 +243,8 @@ function normalizePhone(raw) {
   return (raw || '').replace(/\D/g, '');
 }
 
+const MEMORY_PRICES = { 0: 0, 8: 2400, 12: 3600, 16: 4800 };
+
 function ordersColFor(phone) {
   return collection(db, "hp_notebooks_order", normalizePhone(phone), "orders");
 }
@@ -176,8 +255,12 @@ let selected = null;
 const selectEl = document.getElementById('model-select');
 const detailsEl = document.getElementById('details');
 const loadingEl = document.getElementById('loading');
+const memorySectionEl = document.getElementById('memory-section');
+const memorySlotsEl = document.getElementById('memory-slots');
+const priceSummaryEl = document.getElementById('price-summary');
 const nameEl = document.getElementById('name-input');
 const phoneEl = document.getElementById('phone-input');
+const noteEl = document.getElementById('note-input');
 const submitBtn = document.getElementById('submit-btn');
 const msgEl = document.getElementById('msg');
 
@@ -194,6 +277,52 @@ function renderDetails(item) {
     <dt>適合種類</dt><dd>${categoryLabel(item.category)}</dd>
     <dt>總庫存</dt><dd>${item.quantity}</dd>
     <dt>剩餘可訂購</dt><dd class="available ${availClass}">${item.available}</dd>
+  `;
+}
+
+function renderMemorySlots(item) {
+  const slots = item.memory_slots || 0;
+  memorySlotsEl.innerHTML = '';
+  if (slots <= 0) {
+    memorySectionEl.style.display = 'none';
+    return;
+  }
+  memorySectionEl.style.display = 'block';
+  for (let i = 0; i < slots; i++) {
+    const row = document.createElement('div');
+    row.className = 'memory-slot-row';
+    row.innerHTML = `
+      <label>插槽 ${i + 1}</label>
+      <select data-memory-slot="${i}">
+        <option value="0">不加購</option>
+        <option value="8">8GB（+$2,400）</option>
+        <option value="12">12GB（+$3,600）</option>
+        <option value="16">16GB（+$4,800）</option>
+      </select>
+    `;
+    row.querySelector('select').addEventListener('change', () => updatePriceSummary(item));
+    memorySlotsEl.appendChild(row);
+  }
+}
+
+function getMemorySelection() {
+  const selects = [...memorySlotsEl.querySelectorAll('select[data-memory-slot]')];
+  const chosen = selects.map((s) => parseInt(s.value, 10)).filter((v) => v > 0);
+  return {
+    spec: chosen.join('+'),
+    amount: chosen.reduce((sum, gb) => sum + (MEMORY_PRICES[gb] || 0), 0),
+  };
+}
+
+function updatePriceSummary(item) {
+  const { amount: memoryAmount } = getMemorySelection();
+  const machineAmount = item.final_price ?? 0;
+  const total = machineAmount + memoryAmount;
+  priceSummaryEl.style.display = 'grid';
+  priceSummaryEl.innerHTML = `
+    <dt>機器金額</dt><dd>NT$ ${machineAmount.toLocaleString()}</dd>
+    <dt>記憶體加購</dt><dd>NT$ ${memoryAmount.toLocaleString()}</dd>
+    <dt>訂購總金額</dt><dd class="total">NT$ ${total.toLocaleString()}</dd>
   `;
 }
 
@@ -237,8 +366,12 @@ selectEl.addEventListener('change', () => {
   selected = items.find((i) => i.no === no) || null;
   if (selected) {
     renderDetails(selected);
+    renderMemorySlots(selected);
+    updatePriceSummary(selected);
   } else {
     detailsEl.style.display = 'none';
+    memorySectionEl.style.display = 'none';
+    priceSummaryEl.style.display = 'none';
   }
   msgEl.className = 'msg';
   updateSubmitState();
@@ -253,7 +386,11 @@ submitBtn.addEventListener('click', async () => {
 
   const name = nameEl.value.trim();
   const phone = phoneEl.value.trim();
+  const note = noteEl.value.trim();
   const itemRef = selected.ref;
+  const { spec: memorySpec, amount: memoryAmount } = getMemorySelection();
+  const machineAmount = selected.final_price ?? 0;
+  const totalAmount = machineAmount + memoryAmount;
 
   if (!normalizePhone(phone)) {
     showMsg('請輸入有效的電話號碼', false);
@@ -277,12 +414,20 @@ submitBtn.addEventListener('click', async () => {
         '電話': phone,
         status: 'ordered',
         created_at: serverTimestamp(),
+        '記憶體規格': memorySpec,
+        '記憶體金額': memoryAmount,
+        '機器金額': machineAmount,
+        '總金額': totalAmount,
+        '備註': note,
       });
     });
 
     showMsg('訂購成功！', true);
     nameEl.value = '';
     phoneEl.value = '';
+    noteEl.value = '';
+    renderMemorySlots(selected);
+    updatePriceSummary(selected);
     await loadItems();
     updateSubmitState();
   } catch (e) {

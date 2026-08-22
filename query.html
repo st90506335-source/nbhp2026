@@ -111,6 +111,23 @@
   .badge.cancelled { background: #f0f1f3; color: var(--muted); }
   .time { color: var(--muted); font-size: 12px; }
   .model-line { font-weight: 600; margin: 4px 0; }
+  .order-detail {
+    margin-top: 8px;
+    font-size: 12px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    row-gap: 4px;
+    column-gap: 10px;
+  }
+  .order-detail dt { color: var(--muted); margin: 0; }
+  .order-detail dd { margin: 0; text-align: right; }
+  .order-detail dd.total { color: var(--text); font-weight: 700; }
+  .note-line {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--muted);
+    white-space: pre-wrap;
+  }
   .cancel-btn {
     margin-top: 10px;
     width: 100%;
@@ -211,6 +228,12 @@ function formatTime(ts) {
 function renderOrderCard(orderSnap) {
   const data = orderSnap.data();
   const isOrdered = data.status === 'ordered';
+  const memorySpec = data['記憶體規格'] || '無';
+  const memoryAmount = data['記憶體金額'] ?? 0;
+  const machineAmount = data['機器金額'] ?? 0;
+  const totalAmount = data['總金額'] ?? (machineAmount + memoryAmount);
+  const note = data['備註'] || '';
+
   const card = document.createElement('div');
   card.className = 'order-card';
   card.innerHTML = `
@@ -220,6 +243,13 @@ function renderOrderCard(orderSnap) {
     </div>
     <div class="model-line">No.${data.no} - ${data.model}</div>
     ${isOrdered ? '' : `<div class="cancelled-note">取消時間：${formatTime(data.cancelled_at)}</div>`}
+    <div class="order-detail">
+      <dt>機器金額</dt><dd>NT$ ${machineAmount.toLocaleString()}</dd>
+      <dt>記憶體規格</dt><dd>${memorySpec}</dd>
+      <dt>記憶體金額</dt><dd>NT$ ${memoryAmount.toLocaleString()}</dd>
+      <dt>總金額</dt><dd class="total">NT$ ${totalAmount.toLocaleString()}</dd>
+    </div>
+    ${note ? `<div class="note-line">備註：${note}</div>` : ''}
   `;
 
   if (isOrdered) {
