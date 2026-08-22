@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HP 筆電出清訂購</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card-bg: #ffffff;
+    --text: #1d2129;
+    --muted: #6b7280;
+    --border: #e2e5ea;
+    --accent: #0f62fe;
+    --accent-hover: #0043ce;
+    --ok: #1a7f37;
+    --err: #d1242f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    padding: 40px 16px;
+  }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    width: 100%;
+    max-width: 520px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  h1 {
+    font-size: 20px;
+    margin: 0 0 4px;
+  }
+  .sub {
+    color: var(--muted);
+    font-size: 13px;
+    margin: 0 0 24px;
+  }
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin: 16px 0 6px;
+  }
+  select, input {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--text);
+  }
+  select:focus, input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .details {
+    margin-top: 16px;
+    padding: 14px 16px;
+    background: #f8f9fb;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    row-gap: 6px;
+    column-gap: 12px;
+  }
+  .details dt { color: var(--muted); }
+  .details dd { margin: 0; text-align: right; font-weight: 600; }
+  .details dd.available.ok { color: var(--ok); }
+  .details dd.available.out { color: var(--err); }
+  button {
+    width: 100%;
+    margin-top: 24px;
+    padding: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  button:hover { background: var(--accent-hover); }
+  button:disabled {
+    background: #b9bec7;
+    cursor: not-allowed;
+  }
+  .msg {
+    margin-top: 16px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    display: none;
+  }
+  .msg.show { display: block; }
+  .msg.ok { background: #dafbe1; color: var(--ok); }
+  .msg.err { background: #ffebe9; color: var(--err); }
+  .placeholder { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>HP 筆電出清訂購</h1>
+  <p class="sub">選擇機種後確認庫存與規格，填寫聯絡資訊送出訂購</p>
+
+  <label for="model-select">選擇機種</label>
+  <select id="model-select">
+    <option value="">請選擇...</option>
+  </select>
+
+  <div id="details" class="details" style="display:none;"></div>
+  <p id="loading" class="placeholder">載入機種資料中...</p>
+
+  <label for="name-input">姓名</label>
+  <input id="name-input" type="text" placeholder="請輸入姓名">
+
+  <label for="phone-input">電話</label>
+  <input id="phone-input" type="tel" placeholder="請輸入電話">
+
+  <button id="submit-btn" disabled>送出訂購</button>
+
+  <div id="msg" class="msg"></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import {
+  getFirestore,
+  collection,
+  doc,
+  getDocs,
+  runTransaction,
+  serverTimestamp,
+} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCkIuQSBoc5bzJ9Tz3PhdUQL3_gIlFmVck",
+  authDomain: "project-527b8c4a-cfeb-4c25-85c.firebaseapp.com",
+  projectId: "project-527b8c4a-cfeb-4c25-85c",
+  storageBucket: "project-527b8c4a-cfeb-4c25-85c.firebasestorage.app",
+  messagingSenderId: "499931946357",
+  appId: "1:499931946357:web:958006c31148fda215c73c",
+  measurementId: "G-9M69E9604R"
+};
+
+// Firestore Native mode 資料庫（另建，因為 nb202608 是 MongoDB 相容 Enterprise edition，不支援原生 API）
+const DATABASE_ID = "nb2026hp";
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app, DATABASE_ID);
+
+const notebooksCol = collection(db, "hp_notebooks");
+
+function normalizePhone(raw) {
+  return (raw || '').replace(/\D/g, '');
+}
+
+function ordersColFor(phone) {
+  return collection(db, "hp_notebooks_order", normalizePhone(phone), "orders");
+}
+
+let items = [];       // [{ ref, no, model, quantity, available, year, cpu_cores, suggested_price, final_price, category }]
+let selected = null;
+
+const selectEl = document.getElementById('model-select');
+const detailsEl = document.getElementById('details');
+const loadingEl = document.getElementById('loading');
+const nameEl = document.getElementById('name-input');
+const phoneEl = document.getElementById('phone-input');
+const submitBtn = document.getElementById('submit-btn');
+const msgEl = document.getElementById('msg');
+
+const categoryLabel = (cats) => (cats && cats.length ? cats.join('、') : '—');
+
+function renderDetails(item) {
+  detailsEl.style.display = 'grid';
+  const availClass = item.available > 0 ? 'ok' : 'out';
+  detailsEl.innerHTML = `
+    <dt>年份</dt><dd>${item.year ?? '—'}</dd>
+    <dt>CPU核心數</dt><dd>${item.cpu_cores ?? '—'}</dd>
+    <dt>建議售價</dt><dd>NT$ ${(item.suggested_price ?? 0).toLocaleString()}</dd>
+    <dt>最終售價</dt><dd>NT$ ${(item.final_price ?? 0).toLocaleString()}</dd>
+    <dt>適合種類</dt><dd>${categoryLabel(item.category)}</dd>
+    <dt>總庫存</dt><dd>${item.quantity}</dd>
+    <dt>剩餘可訂購</dt><dd class="available ${availClass}">${item.available}</dd>
+  `;
+}
+
+function updateSubmitState() {
+  const ready = selected && selected.available > 0 && nameEl.value.trim() && phoneEl.value.trim();
+  submitBtn.disabled = !ready;
+  submitBtn.textContent = selected && selected.available <= 0 ? '已售完' : '送出訂購';
+}
+
+function showMsg(text, ok) {
+  msgEl.textContent = text;
+  msgEl.className = 'msg show ' + (ok ? 'ok' : 'err');
+}
+
+async function loadItems() {
+  const snap = await getDocs(notebooksCol);
+  items = snap.docs
+    .map((d) => ({ ref: d.ref, ...d.data() }))
+    .sort((a, b) => a.no - b.no);
+  loadingEl.style.display = 'none';
+
+  const prevSelectedNo = selected ? selected.no : null;
+  selectEl.innerHTML = '<option value="">請選擇...</option>';
+  for (const item of items) {
+    const opt = document.createElement('option');
+    opt.value = item.no;
+    const soldOut = item.available <= 0 ? '（已售完）' : `（剩 ${item.available}）`;
+    opt.textContent = `No.${item.no} - ${item.model} ${soldOut}`;
+    selectEl.appendChild(opt);
+  }
+
+  if (prevSelectedNo != null) {
+    selectEl.value = prevSelectedNo;
+    selected = items.find((i) => i.no === prevSelectedNo) || null;
+    if (selected) renderDetails(selected);
+  }
+}
+
+selectEl.addEventListener('change', () => {
+  const no = parseInt(selectEl.value, 10);
+  selected = items.find((i) => i.no === no) || null;
+  if (selected) {
+    renderDetails(selected);
+  } else {
+    detailsEl.style.display = 'none';
+  }
+  msgEl.className = 'msg';
+  updateSubmitState();
+});
+
+nameEl.addEventListener('input', updateSubmitState);
+phoneEl.addEventListener('input', updateSubmitState);
+
+submitBtn.addEventListener('click', async () => {
+  if (!selected) return;
+  if (!window.confirm('確定訂購？')) return;
+
+  const name = nameEl.value.trim();
+  const phone = phoneEl.value.trim();
+  const itemRef = selected.ref;
+
+  if (!normalizePhone(phone)) {
+    showMsg('請輸入有效的電話號碼', false);
+    return;
+  }
+
+  submitBtn.disabled = true;
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(itemRef);
+      const available = snap.data().available;
+      if (!(available > 0)) {
+        throw new Error('SOLD_OUT');
+      }
+      tx.update(itemRef, { available: available - 1 });
+      const orderRef = doc(ordersColFor(phone));
+      tx.set(orderRef, {
+        no: selected.no,
+        model: selected.model,
+        '姓名': name,
+        '電話': phone,
+        status: 'ordered',
+        created_at: serverTimestamp(),
+      });
+    });
+
+    showMsg('訂購成功！', true);
+    nameEl.value = '';
+    phoneEl.value = '';
+    await loadItems();
+    updateSubmitState();
+  } catch (e) {
+    if (e.message === 'SOLD_OUT') {
+      showMsg('庫存不足，已售完', false);
+    } else {
+      showMsg('訂購失敗，請稍後再試', false);
+      console.error(e);
+    }
+    await loadItems();
+    updateSubmitState();
+  }
+});
+
+loadItems();
+</script>
+</body>
+</html>
