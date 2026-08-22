@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>庫存管理</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card-bg: #ffffff;
+    --text: #1d2129;
+    --muted: #6b7280;
+    --border: #e2e5ea;
+    --accent: #0f62fe;
+    --accent-hover: #0043ce;
+    --ok: #1a7f37;
+    --err: #d1242f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    padding: 40px 16px;
+  }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    width: 100%;
+    max-width: 600px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .login-card { max-width: 400px; margin-top: 80px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 16px 0 6px; }
+  input { width: 100%; padding: 10px 12px; font-size: 14px; border: 1px solid var(--border); border-radius: 8px; }
+  textarea {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 13px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    min-height: 160px;
+    resize: vertical;
+  }
+  button {
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  button:hover { background: var(--accent-hover); }
+  button:disabled { background: #b9bec7; cursor: not-allowed; }
+  .full-btn { width: 100%; margin-top: 16px; }
+  .msg { margin-top: 16px; padding: 10px 14px; border-radius: 8px; font-size: 13px; display: none; }
+  .msg.show { display: block; }
+  .msg.ok { background: #dafbe1; color: var(--ok); }
+  .msg.err { background: #ffebe9; color: var(--err); }
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .topbar .who { font-size: 13px; color: var(--muted); }
+  .topbar a { color: var(--accent); font-size: 13px; text-decoration: none; }
+  .topbar a:hover { text-decoration: underline; }
+  .denied { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .result-list { margin-top: 16px; font-size: 13px; }
+  .result-row { padding: 8px 10px; border-radius: 6px; margin-bottom: 6px; }
+  .result-row.ok { background: #dafbe1; color: var(--ok); }
+  .result-row.err { background: #ffebe9; color: var(--err); }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<div id="login-view" class="card login-card">
+  <h1>庫存管理登入</h1>
+  <p class="sub">請使用管理員帳號登入</p>
+  <label for="login-email">Email</label>
+  <input id="login-email" type="email" placeholder="you@example.com">
+  <label for="login-password">密碼</label>
+  <input id="login-password" type="password" placeholder="密碼">
+  <button id="login-btn" class="full-btn">登入</button>
+  <div id="login-msg" class="msg"></div>
+</div>
+
+<div id="denied-view" class="card" style="display:none;">
+  <div class="denied">此帳號沒有庫存管理頁的權限</div>
+</div>
+
+<div id="main-view" class="card" style="display:none;">
+  <div class="topbar">
+    <div class="who">登入身分：<span id="who-email"></span></div>
+    <a href="#" id="logout-link">登出</a>
+  </div>
+  <h1>庫存管理</h1>
+  <p class="sub">貼上 CSV，每行「編號,數量」，數量是要設定的庫存總數（不是異動量）</p>
+
+  <label for="csv-input">CSV 內容</label>
+  <textarea id="csv-input" placeholder="70,2&#10;15,0&#10;23,5"></textarea>
+  <p class="hint">逐行處理：能更新的先更新，會導致負庫存的行會被擋下並列出原因，不影響其他行</p>
+
+  <button id="apply-btn" class="full-btn">套用更新</button>
+
+  <div id="msg" class="msg"></div>
+  <div id="result-list" class="result-list"></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut,
+} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import {
+  getFirestore,
+  doc,
+  runTransaction,
+} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCkIuQSBoc5bzJ9Tz3PhdUQL3_gIlFmVck",
+  authDomain: "project-527b8c4a-cfeb-4c25-85c.firebaseapp.com",
+  projectId: "project-527b8c4a-cfeb-4c25-85c",
+  storageBucket: "project-527b8c4a-cfeb-4c25-85c.firebasestorage.app",
+  messagingSenderId: "499931946357",
+  appId: "1:499931946357:web:958006c31148fda215c73c",
+  measurementId: "G-9M69E9604R"
+};
+
+const DATABASE_ID = "nb2026hp";
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app, DATABASE_ID);
+const authClient = getAuth(app);
+const ALLOWED_ROLES = ['super_admin', 'inventory'];
+
+const loginView = document.getElementById('login-view');
+const deniedView = document.getElementById('denied-view');
+const mainView = document.getElementById('main-view');
+const loginEmailEl = document.getElementById('login-email');
+const loginPasswordEl = document.getElementById('login-password');
+const loginBtn = document.getElementById('login-btn');
+const loginMsgEl = document.getElementById('login-msg');
+const whoEmailEl = document.getElementById('who-email');
+const logoutLink = document.getElementById('logout-link');
+const csvInputEl = document.getElementById('csv-input');
+const applyBtn = document.getElementById('apply-btn');
+const msgEl = document.getElementById('msg');
+const resultListEl = document.getElementById('result-list');
+
+function showMsg(text, ok) {
+  msgEl.textContent = text;
+  msgEl.className = 'msg show ' + (ok ? 'ok' : 'err');
+}
+
+function showLoginMsg(text) {
+  loginMsgEl.textContent = text;
+  loginMsgEl.className = 'msg show err';
+}
+
+loginBtn.addEventListener('click', async () => {
+  loginBtn.disabled = true;
+  try {
+    await signInWithEmailAndPassword(authClient, loginEmailEl.value.trim(), loginPasswordEl.value);
+  } catch (e) {
+    showLoginMsg('登入失敗，請確認帳號密碼');
+  } finally {
+    loginBtn.disabled = false;
+  }
+});
+
+logoutLink.addEventListener('click', async (e) => {
+  e.preventDefault();
+  await signOut(authClient);
+});
+
+function parseCsv(text) {
+  const lines = text.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+  const rows = [];
+  for (const line of lines) {
+    const parts = line.split(',').map((p) => p.trim());
+    if (parts.length !== 2) {
+      rows.push({ raw: line, error: '格式錯誤（應為 編號,數量）' });
+      continue;
+    }
+    const no = parseInt(parts[0], 10);
+    const quantity = parseInt(parts[1], 10);
+    if (Number.isNaN(no) || Number.isNaN(quantity) || quantity < 0) {
+      rows.push({ raw: line, error: '編號或數量格式錯誤' });
+      continue;
+    }
+    rows.push({ raw: line, no, quantity });
+  }
+  return rows;
+}
+
+async function applyRow(row) {
+  const itemRef = doc(db, 'hp_notebooks', String(row.no));
+  try {
+    const result = await runTransaction(db, async (tx) => {
+      const snap = await tx.get(itemRef);
+      if (!snap.exists()) {
+        throw new Error('NOT_FOUND');
+      }
+      const current = snap.data();
+      const consumed = current.quantity - current.available;
+      const newAvailable = row.quantity - consumed;
+      if (newAvailable < 0) {
+        throw new Error(`BLOCKED:${consumed}`);
+      }
+      tx.update(itemRef, { quantity: row.quantity, available: newAvailable });
+      return { model: current.model, newAvailable };
+    });
+    return { ok: true, message: `No.${row.no}（${result.model}）庫存已更新為 ${row.quantity}，剩餘可訂購 ${result.newAvailable}` };
+  } catch (e) {
+    if (e.message === 'NOT_FOUND') {
+      return { ok: false, message: `No.${row.no}：找不到此機種` };
+    }
+    if (e.message.startsWith('BLOCKED:')) {
+      const consumed = e.message.split(':')[1];
+      return { ok: false, message: `No.${row.no}：目前有 ${consumed} 筆有效訂單，無法降到 ${row.quantity}，請先到訂單管理頁取消部分訂單` };
+    }
+    console.error(e);
+    return { ok: false, message: `No.${row.no}：更新失敗，請稍後再試` };
+  }
+}
+
+applyBtn.addEventListener('click', async () => {
+  const rows = parseCsv(csvInputEl.value);
+  if (rows.length === 0) {
+    showMsg('請貼上 CSV 內容', false);
+    return;
+  }
+
+  applyBtn.disabled = true;
+  resultListEl.innerHTML = '';
+  let okCount = 0;
+  let errCount = 0;
+
+  for (const row of rows) {
+    let result;
+    if (row.error) {
+      result = { ok: false, message: `「${row.raw}」：${row.error}` };
+    } else {
+      result = await applyRow(row);
+    }
+    if (result.ok) okCount++; else errCount++;
+    const div = document.createElement('div');
+    div.className = 'result-row ' + (result.ok ? 'ok' : 'err');
+    div.textContent = result.message;
+    resultListEl.appendChild(div);
+  }
+
+  showMsg(`完成：成功 ${okCount} 行，失敗/擋下 ${errCount} 行`, errCount === 0);
+  applyBtn.disabled = false;
+});
+
+onAuthStateChanged(authClient, async (user) => {
+  if (!user) {
+    loginView.style.display = 'block';
+    deniedView.style.display = 'none';
+    mainView.style.display = 'none';
+    return;
+  }
+  const tokenResult = await user.getIdTokenResult();
+  if (!ALLOWED_ROLES.includes(tokenResult.claims.role)) {
+    loginView.style.display = 'none';
+    deniedView.style.display = 'block';
+    mainView.style.display = 'none';
+    return;
+  }
+  loginView.style.display = 'none';
+  deniedView.style.display = 'none';
+  mainView.style.display = 'block';
+  whoEmailEl.textContent = user.email;
+});
+</script>
+</body>
+</html>

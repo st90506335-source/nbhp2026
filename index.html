@@ -150,7 +150,16 @@
 </style>
 </head>
 <body>
-<div class="card">
+<div id="gate-card" class="card">
+  <h1>HP 筆電出清訂購</h1>
+  <p class="sub">請輸入訂購代碼以繼續</p>
+  <label for="gate-code-input">訂購代碼</label>
+  <input id="gate-code-input" type="text" placeholder="請輸入訂購代碼">
+  <button id="gate-submit-btn">進入訂購頁</button>
+  <div id="gate-msg" class="msg"></div>
+</div>
+
+<div id="order-card" class="card" style="display:none;">
   <h1>HP 筆電出清訂購</h1>
   <p class="sub ai-style-change-1">
     <div style="background: #fff4f4; border-left: 4px solid #ef4444; padding: 12px 16px; margin-bottom: 20px; border-radius: 4px; color: #b91c1c; font-weight: 600;">
@@ -216,6 +225,7 @@ import {
   getFirestore,
   collection,
   doc,
+  getDoc,
   getDocs,
   runTransaction,
   serverTimestamp,
@@ -249,8 +259,21 @@ function ordersColFor(phone) {
   return collection(db, "hp_notebooks_order", normalizePhone(phone), "orders");
 }
 
-let items = [];       // [{ ref, no, model, quantity, available, year, cpu_cores, suggested_price, final_price, category }]
+const PRICE_FIELD_BY_PLAN = { A: 'price_a', B: 'final_price', C: 'price_c' };
+
+function priceFor(item, plan) {
+  return item[PRICE_FIELD_BY_PLAN[plan] || 'final_price'] ?? 0;
+}
+
+let agent = null;     // { code, plan, name }
+let items = [];       // [{ ref, no, model, quantity, available, year, cpu_cores, price_a, final_price, price_c, category }]
 let selected = null;
+
+const gateCardEl = document.getElementById('gate-card');
+const orderCardEl = document.getElementById('order-card');
+const gateCodeEl = document.getElementById('gate-code-input');
+const gateSubmitBtn = document.getElementById('gate-submit-btn');
+const gateMsgEl = document.getElementById('gate-msg');
 
 const selectEl = document.getElementById('model-select');
 const detailsEl = document.getElementById('details');
@@ -272,8 +295,7 @@ function renderDetails(item) {
   detailsEl.innerHTML = `
     <dt>年份</dt><dd>${item.year ?? '—'}</dd>
     <dt>CPU核心數</dt><dd>${item.cpu_cores ?? '—'}</dd>
-    <dt>建議售價</dt><dd>NT$ ${(item.suggested_price ?? 0).toLocaleString()}</dd>
-    <dt>最終售價</dt><dd>NT$ ${(item.final_price ?? 0).toLocaleString()}</dd>
+    <dt>售價</dt><dd>NT$ ${priceFor(item, agent.plan).toLocaleString()}</dd>
     <dt>適合種類</dt><dd>${categoryLabel(item.category)}</dd>
     <dt>總庫存</dt><dd>${item.quantity}</dd>
     <dt>剩餘可訂購</dt><dd class="available ${availClass}">${item.available}</dd>
@@ -316,7 +338,7 @@ function getMemorySelection() {
 
 function updatePriceSummary(item) {
   const { amount: memoryAmount } = getMemorySelection();
-  const machineAmount = item.final_price ?? 0;
+  const machineAmount = priceFor(item, agent.plan);
   const total = machineAmount + memoryAmount;
   priceSummaryEl.style.display = 'grid';
   priceSummaryEl.innerHTML = `
@@ -389,7 +411,7 @@ submitBtn.addEventListener('click', async () => {
   const note = noteEl.value.trim();
   const itemRef = selected.ref;
   const { spec: memorySpec, amount: memoryAmount } = getMemorySelection();
-  const machineAmount = selected.final_price ?? 0;
+  const machineAmount = priceFor(selected, agent.plan);
   const totalAmount = machineAmount + memoryAmount;
 
   if (!normalizePhone(phone)) {
@@ -419,6 +441,8 @@ submitBtn.addEventListener('click', async () => {
         '機器金額': machineAmount,
         '總金額': totalAmount,
         '備註': note,
+        '推薦碼': agent.code,
+        '售價方案': agent.plan,
       });
     });
 
@@ -442,7 +466,56 @@ submitBtn.addEventListener('click', async () => {
   }
 });
 
-loadItems();
+const AGENT_SESSION_KEY = 'hp_nb_agent';
+
+function showGateMsg(text) {
+  gateMsgEl.textContent = text;
+  gateMsgEl.className = 'msg show err';
+}
+
+async function tryEnterCode(code) {
+  const trimmed = (code || '').trim();
+  if (!trimmed) {
+    showGateMsg('請輸入訂購代碼');
+    return;
+  }
+  gateSubmitBtn.disabled = true;
+  try {
+    const snap = await getDoc(doc(db, 'hp_agents', trimmed));
+    if (!snap.exists()) {
+      showGateMsg('訂購代碼錯誤，請確認後再試');
+      return;
+    }
+    const data = snap.data();
+    agent = { code: trimmed, plan: data['售價方案'], name: data['顯示名稱'] };
+    sessionStorage.setItem(AGENT_SESSION_KEY, JSON.stringify(agent));
+    gateCardEl.style.display = 'none';
+    orderCardEl.style.display = 'block';
+    await loadItems();
+  } catch (e) {
+    showGateMsg('查詢失敗，請稍後再試');
+    console.error(e);
+  } finally {
+    gateSubmitBtn.disabled = false;
+  }
+}
+
+gateSubmitBtn.addEventListener('click', () => tryEnterCode(gateCodeEl.value));
+gateCodeEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') tryEnterCode(gateCodeEl.value);
+});
+
+const savedAgent = sessionStorage.getItem(AGENT_SESSION_KEY);
+if (savedAgent) {
+  try {
+    agent = JSON.parse(savedAgent);
+    gateCardEl.style.display = 'none';
+    orderCardEl.style.display = 'block';
+    loadItems();
+  } catch {
+    sessionStorage.removeItem(AGENT_SESSION_KEY);
+  }
+}
 </script>
 </body>
 </html>

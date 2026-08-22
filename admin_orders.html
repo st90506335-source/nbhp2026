@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>訂單管理</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card-bg: #ffffff;
+    --text: #1d2129;
+    --muted: #6b7280;
+    --border: #e2e5ea;
+    --accent: #0f62fe;
+    --accent-hover: #0043ce;
+    --ok: #1a7f37;
+    --err: #d1242f;
+    --warn: #9a6700;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 32px 16px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .login-card { max-width: 400px; margin: 80px auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
+  input, select {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--text);
+  }
+  button {
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  button:hover { background: var(--accent-hover); }
+  button:disabled { background: #b9bec7; cursor: not-allowed; }
+  .login-card button { width: 100%; margin-top: 18px; }
+  .msg { margin-top: 14px; padding: 10px 14px; border-radius: 8px; font-size: 13px; display: none; }
+  .msg.show { display: block; }
+  .msg.ok { background: #dafbe1; color: var(--ok); }
+  .msg.err { background: #ffebe9; color: var(--err); }
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .topbar .who { font-size: 13px; color: var(--muted); }
+  .topbar a { color: var(--accent); font-size: 13px; text-decoration: none; margin-left: 12px; }
+  .topbar a:hover { text-decoration: underline; }
+  .filter-row { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; }
+  .filter-row select { width: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+  td.num { text-align: right; }
+  .status-select { width: auto; padding: 6px 8px; font-size: 12px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .badge.ordered { background: #dbeafe; color: #1d4ed8; }
+  .badge.confirmed { background: #fef3c7; color: var(--warn); }
+  .badge.completed { background: #dafbe1; color: var(--ok); }
+  .badge.cancelled { background: #f0f1f3; color: var(--muted); }
+  .empty { color: var(--muted); font-size: 13px; padding: 20px 0; text-align: center; }
+  .denied { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .table-scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="login-view" class="card login-card">
+    <h1>訂單管理登入</h1>
+    <p class="sub">請使用管理員帳號登入</p>
+    <label for="login-email">Email</label>
+    <input id="login-email" type="email" placeholder="you@example.com">
+    <label for="login-password">密碼</label>
+    <input id="login-password" type="password" placeholder="密碼">
+    <button id="login-btn">登入</button>
+    <div id="login-msg" class="msg"></div>
+  </div>
+
+  <div id="denied-view" class="card" style="display:none;">
+    <div class="denied">此帳號沒有訂單管理頁的權限</div>
+  </div>
+
+  <div id="main-view" class="card" style="display:none;">
+    <div class="topbar">
+      <div class="who">登入身分：<span id="who-email"></span></div>
+      <div>
+        <a href="admin_inventory.html">庫存管理</a>
+        <a href="admin_agents.html">代理人管理</a>
+        <a href="#" id="logout-link">登出</a>
+      </div>
+    </div>
+    <h1>訂單管理</h1>
+    <p class="sub">共 <span id="order-count">0</span> 筆</p>
+
+    <div class="filter-row">
+      <label style="margin:0;">狀態篩選</label>
+      <select id="status-filter">
+        <option value="">全部</option>
+        <option value="ordered">訂購中</option>
+        <option value="confirmed">已成立</option>
+        <option value="completed">已完成</option>
+        <option value="cancelled">取消</option>
+      </select>
+      <button id="refresh-btn">重新整理</button>
+    </div>
+
+    <div id="msg" class="msg"></div>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>訂購時間</th>
+            <th>No./型號</th>
+            <th>姓名</th>
+            <th>電話</th>
+            <th>記憶體</th>
+            <th class="num">總金額</th>
+            <th>推薦碼/方案</th>
+            <th>備註</th>
+            <th>狀態</th>
+          </tr>
+        </thead>
+        <tbody id="order-rows"></tbody>
+      </table>
+    </div>
+    <p id="empty-state" class="empty" style="display:none;">目前沒有符合條件的訂單</p>
+  </div>
+
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut,
+} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import {
+  getFirestore,
+  collectionGroup,
+  query,
+  orderBy,
+  getDocs,
+  doc,
+  runTransaction,
+  serverTimestamp,
+} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCkIuQSBoc5bzJ9Tz3PhdUQL3_gIlFmVck",
+  authDomain: "project-527b8c4a-cfeb-4c25-85c.firebaseapp.com",
+  projectId: "project-527b8c4a-cfeb-4c25-85c",
+  storageBucket: "project-527b8c4a-cfeb-4c25-85c.firebasestorage.app",
+  messagingSenderId: "499931946357",
+  appId: "1:499931946357:web:958006c31148fda215c73c",
+  measurementId: "G-9M69E9604R"
+};
+
+const DATABASE_ID = "nb2026hp";
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app, DATABASE_ID);
+const authClient = getAuth(app);
+
+const STATUS_LABEL = { ordered: '訂購中', confirmed: '已成立', completed: '已完成', cancelled: '取消' };
+
+const loginView = document.getElementById('login-view');
+const deniedView = document.getElementById('denied-view');
+const mainView = document.getElementById('main-view');
+const loginEmailEl = document.getElementById('login-email');
+const loginPasswordEl = document.getElementById('login-password');
+const loginBtn = document.getElementById('login-btn');
+const loginMsgEl = document.getElementById('login-msg');
+const whoEmailEl = document.getElementById('who-email');
+const logoutLink = document.getElementById('logout-link');
+const statusFilterEl = document.getElementById('status-filter');
+const refreshBtn = document.getElementById('refresh-btn');
+const orderRowsEl = document.getElementById('order-rows');
+const emptyStateEl = document.getElementById('empty-state');
+const orderCountEl = document.getElementById('order-count');
+const msgEl = document.getElementById('msg');
+
+function showMsg(text, ok) {
+  msgEl.textContent = text;
+  msgEl.className = 'msg show ' + (ok ? 'ok' : 'err');
+}
+
+function showLoginMsg(text) {
+  loginMsgEl.textContent = text;
+  loginMsgEl.className = 'msg show err';
+}
+
+loginBtn.addEventListener('click', async () => {
+  loginBtn.disabled = true;
+  try {
+    await signInWithEmailAndPassword(authClient, loginEmailEl.value.trim(), loginPasswordEl.value);
+  } catch (e) {
+    showLoginMsg('登入失敗，請確認帳號密碼');
+  } finally {
+    loginBtn.disabled = false;
+  }
+});
+
+logoutLink.addEventListener('click', async (e) => {
+  e.preventDefault();
+  await signOut(authClient);
+});
+
+let allOrders = [];
+
+function formatTime(ts) {
+  if (!ts) return '—';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleString('zh-TW', { hour12: false });
+}
+
+function renderRows() {
+  const filter = statusFilterEl.value;
+  const rows = filter ? allOrders.filter((o) => o.data.status === filter) : allOrders;
+  orderCountEl.textContent = rows.length;
+  orderRowsEl.innerHTML = '';
+  emptyStateEl.style.display = rows.length ? 'none' : 'block';
+
+  for (const order of rows) {
+    const d = order.data;
+    const tr = document.createElement('tr');
+    const memoryLine = d['記憶體規格'] ? `${d['記憶體規格']}（+$${(d['記憶體金額'] || 0).toLocaleString()}）` : '無';
+    tr.innerHTML = `
+      <td>${formatTime(d.created_at)}</td>
+      <td>No.${d.no}<br>${d.model}</td>
+      <td>${d['姓名'] || ''}</td>
+      <td>${d['電話'] || ''}</td>
+      <td>${memoryLine}</td>
+      <td class="num">NT$ ${(d['總金額'] || 0).toLocaleString()}</td>
+      <td>${d['推薦碼'] || '—'} / ${d['售價方案'] || '—'}</td>
+      <td>${d['備註'] || ''}</td>
+      <td><span class="badge ${d.status}">${STATUS_LABEL[d.status] || d.status}</span></td>
+    `;
+    const statusCell = document.createElement('td');
+    const select = document.createElement('select');
+    select.className = 'status-select';
+    for (const value of ['ordered', 'confirmed', 'completed', 'cancelled']) {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = STATUS_LABEL[value];
+      if (value === d.status) opt.selected = true;
+      select.appendChild(opt);
+    }
+    select.addEventListener('change', () => changeStatus(order.ref, d, select.value, select));
+    statusCell.appendChild(select);
+    tr.appendChild(statusCell);
+    orderRowsEl.appendChild(tr);
+  }
+}
+
+async function changeStatus(orderRef, orderData, newStatus, selectEl) {
+  if (newStatus === orderData.status) return;
+  if (newStatus === 'cancelled' && !window.confirm('確定取消嗎？')) {
+    selectEl.value = orderData.status;
+    return;
+  }
+
+  const itemRef = doc(db, 'hp_notebooks', String(orderData.no));
+  selectEl.disabled = true;
+  try {
+    await runTransaction(db, async (tx) => {
+      const wasCancelled = orderData.status === 'cancelled';
+      const willBeCancelled = newStatus === 'cancelled';
+
+      if (willBeCancelled && !wasCancelled) {
+        tx.update(orderRef, { status: 'cancelled', cancelled_at: serverTimestamp() });
+        const itemSnap = await tx.get(itemRef);
+        const available = itemSnap.data().available;
+        const quantity = itemSnap.data().quantity;
+        if (available < quantity) tx.update(itemRef, { available: available + 1 });
+      } else if (!willBeCancelled && wasCancelled) {
+        const itemSnap = await tx.get(itemRef);
+        const available = itemSnap.data().available;
+        if (!(available > 0)) throw new Error('SOLD_OUT');
+        tx.update(itemRef, { available: available - 1 });
+        tx.update(orderRef, { status: newStatus });
+      } else {
+        tx.update(orderRef, { status: newStatus });
+      }
+    });
+
+    orderData.status = newStatus;
+    showMsg('狀態已更新', true);
+    renderRows();
+  } catch (e) {
+    if (e.message === 'SOLD_OUT') {
+      showMsg('無法改回未取消狀態：庫存已經是 0', false);
+    } else {
+      showMsg('更新失敗，請稍後再試', false);
+      console.error(e);
+    }
+    selectEl.value = orderData.status;
+  } finally {
+    selectEl.disabled = false;
+  }
+}
+
+async function loadOrders() {
+  showMsg('', true);
+  msgEl.className = 'msg';
+  try {
+    const q = query(collectionGroup(db, 'orders'), orderBy('created_at', 'desc'));
+    const snap = await getDocs(q);
+    allOrders = snap.docs.map((d) => ({ ref: d.ref, data: d.data() }));
+    renderRows();
+  } catch (e) {
+    showMsg('讀取訂單失敗', false);
+    console.error(e);
+  }
+}
+
+statusFilterEl.addEventListener('change', renderRows);
+refreshBtn.addEventListener('click', loadOrders);
+
+onAuthStateChanged(authClient, async (user) => {
+  if (!user) {
+    loginView.style.display = 'block';
+    deniedView.style.display = 'none';
+    mainView.style.display = 'none';
+    return;
+  }
+  const tokenResult = await user.getIdTokenResult();
+  if (tokenResult.claims.role !== 'super_admin') {
+    loginView.style.display = 'none';
+    deniedView.style.display = 'block';
+    mainView.style.display = 'none';
+    return;
+  }
+  loginView.style.display = 'none';
+  deniedView.style.display = 'none';
+  mainView.style.display = 'block';
+  whoEmailEl.textContent = user.email;
+  await loadOrders();
+});
+</script>
+</body>
+</html>
