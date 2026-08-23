@@ -284,6 +284,7 @@ applyBtn.addEventListener('click', async () => {
   resultListEl.innerHTML = '';
   let okCount = 0;
   let errCount = 0;
+  const failedLines = [];
 
   for (const row of rows) {
     let result;
@@ -292,7 +293,12 @@ applyBtn.addEventListener('click', async () => {
     } else {
       result = await applyRow(row);
     }
-    if (result.ok) okCount++; else errCount++;
+    if (result.ok) {
+      okCount++;
+    } else {
+      errCount++;
+      failedLines.push(row.raw);
+    }
     const div = document.createElement('div');
     div.className = 'result-row ' + (result.ok ? 'ok' : 'err');
     div.textContent = result.message;
@@ -300,6 +306,7 @@ applyBtn.addEventListener('click', async () => {
   }
 
   showMsg(`完成：成功 ${okCount} 行，失敗/擋下 ${errCount} 行`, errCount === 0);
+  csvInputEl.value = failedLines.join('\n');
   await loadProductList(myPlan);
   applyBtn.disabled = false;
 });

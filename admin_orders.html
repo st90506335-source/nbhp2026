@@ -308,10 +308,10 @@ async function changeStatus(orderRef, orderData, newStatus, selectEl) {
       const willBeCancelled = newStatus === 'cancelled';
 
       if (willBeCancelled && !wasCancelled) {
-        tx.update(orderRef, { status: 'cancelled', cancelled_at: serverTimestamp() });
         const itemSnap = await tx.get(itemRef);
         const available = itemSnap.data().available;
         const quantity = itemSnap.data().quantity;
+        tx.update(orderRef, { status: 'cancelled', cancelled_at: serverTimestamp() });
         if (available < quantity) tx.update(itemRef, { available: available + 1 });
       } else if (!willBeCancelled && wasCancelled) {
         const itemSnap = await tx.get(itemRef);

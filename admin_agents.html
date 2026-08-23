@@ -108,6 +108,14 @@
   <input id="password-input" type="text" placeholder="僅供記錄">
   <p class="hint">僅供記錄，實際登入帳密請告知開發者設定，這裡不會真的改密碼</p>
 
+  <label for="role-select">角色</label>
+  <select id="role-select">
+    <option value="super_admin">super_admin（全部後台頁面）</option>
+    <option value="inventory">inventory（只能開庫存管理頁）</option>
+    <option value="sales">sales（只能唯讀看自己的訂單）</option>
+  </select>
+  <p class="hint">僅供記錄，跟密碼一樣無法從網頁直接生效（瀏覽器沒辦法設定別人的登入權限），實際角色請告知開發者設定</p>
+
   <label for="code-input">推薦碼</label>
   <input id="code-input" type="text" placeholder="例如 0202">
 
@@ -127,7 +135,7 @@
 
   <h2>現有代理人</h2>
   <table>
-    <thead><tr><th>推薦碼</th><th>Email</th><th>顯示名稱</th><th>售價方案</th></tr></thead>
+    <thead><tr><th>推薦碼</th><th>Email</th><th>顯示名稱</th><th>售價方案</th><th>角色</th></tr></thead>
     <tbody id="agent-rows"></tbody>
   </table>
   <p id="empty-state" class="empty" style="display:none;">目前沒有任何代理人</p>
@@ -181,6 +189,7 @@ const logoutLink = document.getElementById('logout-link');
 const emailEl = document.getElementById('email-input');
 const passwordEl = document.getElementById('password-input');
 const codeEl = document.getElementById('code-input');
+const roleEl = document.getElementById('role-select');
 const planEl = document.getElementById('plan-select');
 const nameEl = document.getElementById('name-input');
 const saveBtn = document.getElementById('save-btn');
@@ -217,6 +226,7 @@ logoutLink.addEventListener('click', async (e) => {
 function fillForm(code, data) {
   emailEl.value = data.email || '';
   passwordEl.value = data['密碼'] || '';
+  roleEl.value = data['角色'] || 'sales';
   codeEl.value = code;
   planEl.value = data['售價方案'] || 'B';
   nameEl.value = data['顯示名稱'] || '';
@@ -235,6 +245,7 @@ async function loadAgents() {
       <td>${data.email || ''}</td>
       <td>${data['顯示名稱'] || ''}</td>
       <td>${data['售價方案'] || ''}</td>
+      <td>${data['角色'] || ''}</td>
     `;
     tr.addEventListener('click', () => fillForm(d.id, data));
     agentRowsEl.appendChild(tr);
@@ -244,6 +255,7 @@ async function loadAgents() {
 saveBtn.addEventListener('click', async () => {
   const email = emailEl.value.trim();
   const password = passwordEl.value.trim();
+  const role = roleEl.value;
   const code = codeEl.value.trim();
   const plan = planEl.value;
   const name = nameEl.value.trim();
@@ -268,7 +280,7 @@ saveBtn.addEventListener('click', async () => {
       return;
     }
 
-    const agentData = { email, '密碼': password, '售價方案': plan, '顯示名稱': name };
+    const agentData = { email, '密碼': password, '角色': role, '售價方案': plan, '顯示名稱': name };
     const isNew = !existingByEmail;
 
     // 既有記錄的推薦碼改變了 → 舊文件要刪掉，資料搬到新推薦碼底下
