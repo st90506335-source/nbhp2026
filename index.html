@@ -147,9 +147,20 @@
     text-decoration: none;
   }
   .query-link:hover { text-decoration: underline; }
+
+  .ai-style-change-1 {
+  body& {
+    background-image: url("https://image.slidesdocs.com/responsive-images/background/3d-rendered-digital-circuitry-of-a-cpu-board-powerpoint-background_b7ccbf53bd__960_540.jpg");
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+  }
+}
+
 </style>
 </head>
-<body>
+<body class="ai-style-change-1">
 <div id="gate-card" class="card">
   <h1>HP 筆電出清訂購</h1>
   <p class="sub">請輸入訂購代碼以繼續</p>
@@ -163,9 +174,9 @@
   <h1>HP 筆電出清訂購</h1>
   <p class="sub ai-style-change-1">
     <div style="background: #fff4f4; border-left: 4px solid #ef4444; padding: 12px 16px; margin-bottom: 20px; border-radius: 4px; color: #b91c1c; font-weight: 600;">
-      ⚠️ 此網頁請勿廣傳！這裡是僅供認識的朋友使用此下單系統
+      ⚠️ 此網頁請勿廣傳！這裡是僅供認識的朋友購買筆電下單使用
     </div>
-    <ul style="list-style: none; padding: 0; margin: 0; color: #4b5563; font-size: 14px; line-height: 1.7;">
+<ul style="list-style: none; padding: 0; margin: 0; color: #4b5563; font-size: 14px; line-height: 1.7;">
       <li style="margin-bottom: 12px; display: flex; align-items: flex-start;">
         <span style="background: #e5e7eb; color: #374151; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 12px; margin-right: 10px; flex-shrink: 0; margin-top: 2px;">1</span>
         <span>選擇機種，已售完則不能再選囉！</span>
@@ -184,10 +195,15 @@
       </li>
       <li style="margin-bottom: 12px; display: flex; align-items: flex-start;">
         <span style="background: #e5e7eb; color: #374151; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 12px; margin-right: 10px; flex-shrink: 0; margin-top: 2px;">4</span>
-        <span>訂單保留七天。若狀態未轉為「完成訂購」，七天後將自動取消。</span>
+        <span>訂單保留七天。若狀態未轉為「完成訂購」，七天後將被取消。</span>
       </li>
-    </ul>
+    <li>
+        <span style="background: #e5e7eb; color: #374151; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 12px; margin-right: 10px; flex-shrink: 0; margin-top: 2px;">5</span>
+        <span>付款後才算完成訂單哦</span>
+      </li></ul>
   </p>
+  <p class="sub" style="margin-top:-8px;">目前使用推薦碼：<strong id="current-code-label"></strong>（<a href="#" id="switch-code-link" style="color:var(--accent);">更換推薦碼</a>）</p>
+
   <label for="model-select">選擇機種</label>
   <select id="model-select">
     <option value="">請選擇...</option>
@@ -274,6 +290,8 @@ const orderCardEl = document.getElementById('order-card');
 const gateCodeEl = document.getElementById('gate-code-input');
 const gateSubmitBtn = document.getElementById('gate-submit-btn');
 const gateMsgEl = document.getElementById('gate-msg');
+const currentCodeLabelEl = document.getElementById('current-code-label');
+const switchCodeLinkEl = document.getElementById('switch-code-link');
 
 const selectEl = document.getElementById('model-select');
 const detailsEl = document.getElementById('details');
@@ -289,12 +307,24 @@ const msgEl = document.getElementById('msg');
 
 const categoryLabel = (cats) => (cats && cats.length ? cats.join('、') : '—');
 
+const PHONE_STORAGE_KEY = 'hp_nb_phone';
+const savedPhone = localStorage.getItem(PHONE_STORAGE_KEY);
+if (savedPhone) phoneEl.value = savedPhone;
+phoneEl.addEventListener('input', () => {
+  localStorage.setItem(PHONE_STORAGE_KEY, phoneEl.value);
+});
+
 function renderDetails(item) {
   detailsEl.style.display = 'grid';
   const availClass = item.available > 0 ? 'ok' : 'out';
   detailsEl.innerHTML = `
     <dt>年份</dt><dd>${item.year ?? '—'}</dd>
+    <dt>LCD(吋)</dt><dd>${item.lcd || '—'}</dd>
     <dt>CPU核心數</dt><dd>${item.cpu_cores ?? '—'}</dd>
+    <dt>顯示卡</dt><dd>${item.gpu || '—'}</dd>
+    <dt>HD</dt><dd>${item.storage || '—'}</dd>
+    <dt>鍵盤</dt><dd>${item.keyboard || '—'}</dd>
+    <dt>顏色</dt><dd>${item.color || '—'}</dd>
     <dt>售價</dt><dd>NT$ ${priceFor(item, agent.plan).toLocaleString()}</dd>
     <dt>適合種類</dt><dd>${categoryLabel(item.category)}</dd>
     <dt>總庫存</dt><dd>${item.quantity}</dd>
@@ -467,11 +497,17 @@ submitBtn.addEventListener('click', async () => {
   }
 });
 
-const AGENT_SESSION_KEY = 'hp_nb_agent';
+const AGENT_STORAGE_KEY = 'hp_nb_agent';
 
 function showGateMsg(text) {
   gateMsgEl.textContent = text;
   gateMsgEl.className = 'msg show err';
+}
+
+function enterOrderCard() {
+  gateCardEl.style.display = 'none';
+  orderCardEl.style.display = 'block';
+  currentCodeLabelEl.textContent = agent.code;
 }
 
 async function tryEnterCode(code) {
@@ -489,9 +525,8 @@ async function tryEnterCode(code) {
     }
     const data = snap.data();
     agent = { code: trimmed, plan: data['售價方案'], name: data['顯示名稱'] };
-    sessionStorage.setItem(AGENT_SESSION_KEY, JSON.stringify(agent));
-    gateCardEl.style.display = 'none';
-    orderCardEl.style.display = 'block';
+    localStorage.setItem(AGENT_STORAGE_KEY, JSON.stringify(agent));
+    enterOrderCard();
     await loadItems();
   } catch (e) {
     showGateMsg('查詢失敗，請稍後再試');
@@ -506,16 +541,28 @@ gateCodeEl.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') tryEnterCode(gateCodeEl.value);
 });
 
-const savedAgent = sessionStorage.getItem(AGENT_SESSION_KEY);
+switchCodeLinkEl.addEventListener('click', (e) => {
+  e.preventDefault();
+  orderCardEl.style.display = 'none';
+  gateCardEl.style.display = 'block';
+  gateCodeEl.value = agent ? agent.code : '';
+  gateMsgEl.className = 'msg';
+  gateCodeEl.focus();
+  gateCodeEl.select();
+});
+
+const savedAgent = localStorage.getItem(AGENT_STORAGE_KEY);
 if (savedAgent) {
   try {
     agent = JSON.parse(savedAgent);
-    gateCardEl.style.display = 'none';
-    orderCardEl.style.display = 'block';
+    gateCodeEl.value = agent.code;
+    enterOrderCard();
     loadItems();
   } catch {
-    sessionStorage.removeItem(AGENT_SESSION_KEY);
+    localStorage.removeItem(AGENT_STORAGE_KEY);
   }
+} else {
+  gateCodeEl.focus();
 }
 </script>
 </body>

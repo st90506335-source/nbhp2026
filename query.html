@@ -215,6 +215,13 @@ function showMsg(text, ok) {
   msgEl.className = 'msg show ' + (ok ? 'ok' : 'err');
 }
 
+const PHONE_STORAGE_KEY = 'hp_nb_phone';
+const savedPhone = localStorage.getItem(PHONE_STORAGE_KEY);
+if (savedPhone) phoneEl.value = savedPhone;
+phoneEl.addEventListener('input', () => {
+  localStorage.setItem(PHONE_STORAGE_KEY, phoneEl.value);
+});
+
 function clearMsg() {
   msgEl.className = 'msg';
 }
