@@ -158,6 +158,17 @@
   }
 }
 
+.ai-style-change-1 {
+  div#sticky-header-wrapper& {
+    position: sticky;
+    top: 0px;
+    z-index: 1000;
+    background-color: white;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgb(238, 238, 238);
+  }
+}
+
 </style>
 </head>
 <body class="ai-style-change-1">
@@ -203,18 +214,30 @@
       </li></ul>
   </p>
   <p class="sub" style="margin-top:-8px;">目前使用推薦碼：<strong id="current-code-label"></strong>（<a href="#" id="switch-code-link" style="color:var(--accent);">更換推薦碼</a>）</p>
+  <div id="sticky-header-wrapper" class="ai-style-change-1">
 
   <label for="model-select">選擇機種</label>
   <select id="model-select">
     <option value="">請選擇...</option>
   </select>
 
+  </div>
+  
+
+  <img id="item-photo" style="display:none; width:100%; border-radius:8px; margin-top:16px; border:1px solid var(--border);">
   <div id="details" class="details" style="display:none;"></div>
   <p id="loading" class="placeholder">載入機種資料中...</p>
 
   <div id="memory-section" style="display:none;">
-    <label>記憶體加購（每個插槽獨立選擇，選填）</label>
+    <label>記憶體加購（每個插槽獨立選擇，選填，建議最少8GB）</label>
     <div id="memory-slots"></div>
+  </div>
+
+  <div id="bag-section" style="display:none; margin-top:12px;">
+    <label style="display:flex; align-items:center; gap:8px; font-weight:400;">
+      <input type="checkbox" id="bag-checkbox" style="width:auto;">
+      筆電包 +$300
+    </label>
   </div>
 
   <div id="price-summary" class="details price-summary" style="display:none;"></div>
@@ -225,8 +248,9 @@
   <label for="phone-input">電話</label>
   <input id="phone-input" type="tel" placeholder="請輸入電話">
 
-  <label for="note-input">備註</label>
+  <label for="note-input">備註(有勾選筆電包請輸入編號、若未輸入隨機配送)</label>
   <textarea id="note-input" placeholder="選填"></textarea>
+  <img src="photos/BAG.jpeg" alt="筆電包編號" style="width:100%; margin-top:8px; border-radius:4px; border:1px solid var(--border);">
 
   <button id="submit-btn" disabled>送出訂購</button>
 
@@ -270,6 +294,7 @@ function normalizePhone(raw) {
 }
 
 const MEMORY_PRICES = { 0: 0, 8: 2400, 12: 3600, 16: 4800 };
+const BAG_PRICE = 300;
 
 function ordersColFor(phone) {
   return collection(db, "hp_notebooks_order", normalizePhone(phone), "orders");
@@ -294,10 +319,13 @@ const currentCodeLabelEl = document.getElementById('current-code-label');
 const switchCodeLinkEl = document.getElementById('switch-code-link');
 
 const selectEl = document.getElementById('model-select');
+const photoEl = document.getElementById('item-photo');
 const detailsEl = document.getElementById('details');
 const loadingEl = document.getElementById('loading');
 const memorySectionEl = document.getElementById('memory-section');
 const memorySlotsEl = document.getElementById('memory-slots');
+const bagSectionEl = document.getElementById('bag-section');
+const bagCheckboxEl = document.getElementById('bag-checkbox');
 const priceSummaryEl = document.getElementById('price-summary');
 const nameEl = document.getElementById('name-input');
 const phoneEl = document.getElementById('phone-input');
@@ -313,6 +341,12 @@ if (savedPhone) phoneEl.value = savedPhone;
 phoneEl.addEventListener('input', () => {
   localStorage.setItem(PHONE_STORAGE_KEY, phoneEl.value);
 });
+
+function renderPhoto(item) {
+  photoEl.style.display = 'block';
+  photoEl.src = `photos/${item.no}.jpeg`;
+  photoEl.onerror = () => { photoEl.style.display = 'none'; };
+}
 
 function renderDetails(item) {
   detailsEl.style.display = 'grid';
@@ -366,14 +400,21 @@ function getMemorySelection() {
   };
 }
 
+function getBagSelection() {
+  const checked = bagCheckboxEl.checked;
+  return { checked, amount: checked ? BAG_PRICE : 0 };
+}
+
 function updatePriceSummary(item) {
   const { amount: memoryAmount } = getMemorySelection();
+  const { amount: bagAmount } = getBagSelection();
   const machineAmount = priceFor(item, agent.plan);
-  const total = machineAmount + memoryAmount;
+  const total = machineAmount + memoryAmount + bagAmount;
   priceSummaryEl.style.display = 'grid';
   priceSummaryEl.innerHTML = `
     <dt>機器金額</dt><dd>NT$ ${machineAmount.toLocaleString()}</dd>
     <dt>記憶體加購</dt><dd>NT$ ${memoryAmount.toLocaleString()}</dd>
+    <dt>筆電包</dt><dd>NT$ ${bagAmount.toLocaleString()}</dd>
     <dt>訂購總金額</dt><dd class="total">NT$ ${total.toLocaleString()}</dd>
   `;
 }
@@ -418,16 +459,24 @@ selectEl.addEventListener('change', () => {
   const no = parseInt(selectEl.value, 10);
   selected = items.find((i) => i.no === no) || null;
   if (selected) {
+    renderPhoto(selected);
     renderDetails(selected);
     renderMemorySlots(selected);
+    bagSectionEl.style.display = 'block';
     updatePriceSummary(selected);
   } else {
+    photoEl.style.display = 'none';
     detailsEl.style.display = 'none';
     memorySectionEl.style.display = 'none';
+    bagSectionEl.style.display = 'none';
     priceSummaryEl.style.display = 'none';
   }
   msgEl.className = 'msg';
   updateSubmitState();
+});
+
+bagCheckboxEl.addEventListener('change', () => {
+  if (selected) updatePriceSummary(selected);
 });
 
 nameEl.addEventListener('input', updateSubmitState);
@@ -442,8 +491,9 @@ submitBtn.addEventListener('click', async () => {
   const note = noteEl.value.trim();
   const itemRef = selected.ref;
   const { spec: memorySpec, amount: memoryAmount } = getMemorySelection();
+  const { checked: bagChecked, amount: bagAmount } = getBagSelection();
   const machineAmount = priceFor(selected, agent.plan);
-  const totalAmount = machineAmount + memoryAmount;
+  const totalAmount = machineAmount + memoryAmount + bagAmount;
 
   if (normalizePhone(phone).length < 10) {
     showMsg('請輸入至少 10 碼的手機號碼', false);
@@ -469,6 +519,8 @@ submitBtn.addEventListener('click', async () => {
         created_at: serverTimestamp(),
         '記憶體規格': memorySpec,
         '記憶體金額': memoryAmount,
+        '筆電包': bagChecked ? 'Y' : 'N',
+        '筆電包金額': bagAmount,
         '機器金額': machineAmount,
         '總金額': totalAmount,
         '備註': note,
@@ -482,6 +534,7 @@ submitBtn.addEventListener('click', async () => {
     phoneEl.value = '';
     noteEl.value = '';
     renderMemorySlots(selected);
+    bagCheckboxEl.checked = false;
     updatePriceSummary(selected);
     await loadItems();
     updateSubmitState();

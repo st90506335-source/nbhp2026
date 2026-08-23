@@ -143,6 +143,7 @@
             <th>電話</th>
             <th class="num">機器金額</th>
             <th>記憶體</th>
+            <th>筆電包</th>
             <th class="num">總金額</th>
             <th>推薦碼/方案</th>
             <th>備註</th>
@@ -260,6 +261,7 @@ function renderRows() {
     const d = order.data;
     const tr = document.createElement('tr');
     const memoryLine = d['記憶體規格'] ? `${d['記憶體規格']}（+$${(d['記憶體金額'] || 0).toLocaleString()}）` : '無';
+    const bagLine = d['筆電包'] === 'Y' ? `有（+$${(d['筆電包金額'] || 0).toLocaleString()}）` : '無';
     tr.innerHTML = `
       <td>${formatTime(d.created_at)}</td>
       <td>No.${d.no}<br>${d.model}</td>
@@ -267,6 +269,7 @@ function renderRows() {
       <td>${d['電話'] || ''}</td>
       <td class="num">NT$ ${(d['機器金額'] || 0).toLocaleString()}</td>
       <td>${memoryLine}</td>
+      <td>${bagLine}</td>
       <td class="num">NT$ ${(d['總金額'] || 0).toLocaleString()}</td>
       <td>${d['推薦碼'] || '—'} / ${d['售價方案'] || '—'}</td>
       <td>${d['備註'] || ''}</td>

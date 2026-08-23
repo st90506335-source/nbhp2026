@@ -241,28 +241,34 @@ function formatTime(ts) {
   return d.toLocaleString('zh-TW', { hour12: false });
 }
 
+const STATUS_LABEL = { ordered: '訂購中', confirmed: '已成立', completed: '已完成', cancelled: '已取消' };
+
 function renderOrderCard(orderSnap) {
   const data = orderSnap.data();
   const isOrdered = data.status === 'ordered';
+  const isCancelled = data.status === 'cancelled';
   const memorySpec = data['記憶體規格'] || '無';
   const memoryAmount = data['記憶體金額'] ?? 0;
+  const bagChecked = data['筆電包'] === 'Y';
+  const bagAmount = data['筆電包金額'] ?? 0;
   const machineAmount = data['機器金額'] ?? 0;
-  const totalAmount = data['總金額'] ?? (machineAmount + memoryAmount);
+  const totalAmount = data['總金額'] ?? (machineAmount + memoryAmount + bagAmount);
   const note = data['備註'] || '';
 
   const card = document.createElement('div');
   card.className = 'order-card';
   card.innerHTML = `
     <div class="top-row">
-      <span class="badge ${isOrdered ? 'ordered' : 'cancelled'}">${isOrdered ? '訂購中' : '已取消'}</span>
+      <span class="badge ${isCancelled ? 'cancelled' : 'ordered'}">${STATUS_LABEL[data.status] || data.status}</span>
       <span class="time">${formatTime(data.created_at)}</span>
     </div>
     <div class="model-line">No.${data.no} - ${data.model}</div>
-    ${isOrdered ? '' : `<div class="cancelled-note">取消時間：${formatTime(data.cancelled_at)}</div>`}
+    ${isCancelled ? `<div class="cancelled-note">取消時間：${formatTime(data.cancelled_at)}</div>` : ''}
     <div class="order-detail">
       <dt>機器金額</dt><dd>NT$ ${machineAmount.toLocaleString()}</dd>
       <dt>記憶體規格</dt><dd>${memorySpec}</dd>
       <dt>記憶體金額</dt><dd>NT$ ${memoryAmount.toLocaleString()}</dd>
+      <dt>筆電包</dt><dd>${bagChecked ? '有' : '無'}（NT$ ${bagAmount.toLocaleString()}）</dd>
       <dt>總金額</dt><dd class="total">NT$ ${totalAmount.toLocaleString()}</dd>
     </div>
     ${note ? `<div class="note-line">備註：${note}</div>` : ''}
