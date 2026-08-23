@@ -147,6 +147,14 @@
     text-decoration: none;
   }
   .query-link:hover { text-decoration: underline; }
+  #original-price {
+    text-align: right;
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--err);
+    text-decoration: line-through;
+    margin-top: 12px;
+  }
 
   .ai-style-change-1 {
   body& {
@@ -169,7 +177,51 @@
   }
 }
 
+.ai-style-change-1 {
+  .details dd& {
+    color: rgb(0, 119, 190);
+    font-size: 22px;
+  }
+}
+
 </style>
+
+<style>
+
+.ai-style-change-1 {
+  .details dd& {
+    color: rgb(0, 119, 190);
+    font-size: 22px;
+    text-shadow: rgba(0, 0, 0, 0.2) 1px 1px 2px;
+    padding: 0px;
+    border-radius: 4px;
+    display: block;
+    background-color: transparent;
+    paint-order: normal;
+  }
+}
+
+  @keyframes ocean-glow {
+    0% { text-shadow: 0 0 5px #00d4ff, 0 0 10px #00d4ff; }
+    50% { text-shadow: 0 0 20px #0077be, 0 0 30px #0077be, 0 0 40px #0077be; }
+    100% { text-shadow: 0 0 5px #00d4ff, 0 0 10px #00d4ff; }
+  }
+  
+  .dazzling-effect {
+    background: linear-gradient(90deg, #0077be, #00d4ff, #ffffff, #00d4ff, #0077be);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shine 3s linear infinite, ocean-glow 2s ease-in-out infinite;
+    font-weight: 800 !important;
+    display: inline-block;
+  }
+
+  @keyframes shine {
+    to { background-position: 200% center; }
+  }
+</style>
+
 </head>
 <body class="ai-style-change-1">
 <div id="gate-card" class="card">
@@ -225,6 +277,7 @@
   
 
   <img id="item-photo" style="display:none; width:100%; border-radius:8px; margin-top:16px; border:1px solid var(--border);">
+  <div id="original-price" style="display:none;"></div>
   <div id="details" class="details" style="display:none;"></div>
   <p id="loading" class="placeholder">載入機種資料中...</p>
 
@@ -320,6 +373,7 @@ const switchCodeLinkEl = document.getElementById('switch-code-link');
 
 const selectEl = document.getElementById('model-select');
 const photoEl = document.getElementById('item-photo');
+const originalPriceEl = document.getElementById('original-price');
 const detailsEl = document.getElementById('details');
 const loadingEl = document.getElementById('loading');
 const memorySectionEl = document.getElementById('memory-section');
@@ -348,6 +402,15 @@ function renderPhoto(item) {
   photoEl.onerror = () => { photoEl.style.display = 'none'; };
 }
 
+function renderOriginalPrice(item) {
+  if (item.original_price) {
+    originalPriceEl.style.display = 'block';
+    originalPriceEl.textContent = `原價 NT$ ${item.original_price.toLocaleString()}`;
+  } else {
+    originalPriceEl.style.display = 'none';
+  }
+}
+
 function renderDetails(item) {
   detailsEl.style.display = 'grid';
   const availClass = item.available > 0 ? 'ok' : 'out';
@@ -359,7 +422,7 @@ function renderDetails(item) {
     <dt>HD</dt><dd>${item.storage || '—'}</dd>
     <dt>鍵盤</dt><dd>${item.keyboard || '—'}</dd>
     <dt>顏色</dt><dd>${item.color || '—'}</dd>
-    <dt>售價</dt><dd>NT$ ${priceFor(item, agent.plan).toLocaleString()}</dd>
+    <dt>售價</dt><dd class="ai-style-change-1 dazzling-effect">NT$ ${priceFor(item, agent.plan).toLocaleString()}</dd>
     <dt>適合種類</dt><dd>${categoryLabel(item.category)}</dd>
     <dt>總庫存</dt><dd>${item.quantity}</dd>
     <dt>剩餘可訂購</dt><dd class="available ${availClass}">${item.available}</dd>
@@ -460,12 +523,14 @@ selectEl.addEventListener('change', () => {
   selected = items.find((i) => i.no === no) || null;
   if (selected) {
     renderPhoto(selected);
+    renderOriginalPrice(selected);
     renderDetails(selected);
     renderMemorySlots(selected);
     bagSectionEl.style.display = 'block';
     updatePriceSummary(selected);
   } else {
     photoEl.style.display = 'none';
+    originalPriceEl.style.display = 'none';
     detailsEl.style.display = 'none';
     memorySectionEl.style.display = 'none';
     bagSectionEl.style.display = 'none';
