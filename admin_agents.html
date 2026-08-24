@@ -100,7 +100,7 @@
     </div>
   </div>
   <h1>代理人管理</h1>
-  <p class="sub">依 Email 判斷：已存在就覆蓋，不存在就新增</p>
+  <p class="sub">依 Email 判斷：已存在就覆蓋，不存在就新增。要修改既有代理人，請先點下方列表載入資料再改，直接空白送出會把該欄位蓋成空白</p>
 
   <label for="email-input">Email</label>
   <input id="email-input" type="email" placeholder="agent@example.com">
@@ -124,8 +124,12 @@
   <select id="plan-select">
     <option value="A">A（出清價）</option>
     <option value="B">B（最終售價）</option>
-    <option value="C">C（最終售價 + 300）</option>
+    <option value="C">C（最終售價 + 獎金）</option>
   </select>
+
+  <label for="bonus-input">獎金</label>
+  <input id="bonus-input" type="number" min="0" step="1" placeholder="例如 300" value="300">
+  <p class="hint">只有售價方案是 C 才會用到：顯示金額 = 最終售價 + 這個數字</p>
 
   <label for="name-input">顯示名稱</label>
   <input id="name-input" type="text" placeholder="例如 Ben">
@@ -136,7 +140,7 @@
 
   <h2>現有代理人</h2>
   <table>
-    <thead><tr><th>推薦碼</th><th>Email</th><th>顯示名稱</th><th>售價方案</th><th>角色</th></tr></thead>
+    <thead><tr><th>推薦碼</th><th>Email</th><th>顯示名稱</th><th>售價方案</th><th>獎金</th><th>角色</th></tr></thead>
     <tbody id="agent-rows"></tbody>
   </table>
   <p id="empty-state" class="empty" style="display:none;">目前沒有任何代理人</p>
@@ -192,6 +196,7 @@ const passwordEl = document.getElementById('password-input');
 const codeEl = document.getElementById('code-input');
 const roleEl = document.getElementById('role-select');
 const planEl = document.getElementById('plan-select');
+const bonusEl = document.getElementById('bonus-input');
 const nameEl = document.getElementById('name-input');
 const saveBtn = document.getElementById('save-btn');
 const msgEl = document.getElementById('msg');
@@ -230,6 +235,7 @@ function fillForm(code, data) {
   roleEl.value = data['角色'] || 'sales';
   codeEl.value = code;
   planEl.value = data['售價方案'] || 'B';
+  bonusEl.value = data['獎金'] ?? 300;
   nameEl.value = data['顯示名稱'] || '';
 }
 
@@ -246,6 +252,7 @@ async function loadAgents() {
       <td>${data.email || ''}</td>
       <td>${data['顯示名稱'] || ''}</td>
       <td>${data['售價方案'] || ''}</td>
+      <td>${data['售價方案'] === 'C' ? (data['獎金'] ?? 0) : '—'}</td>
       <td>${data['角色'] || ''}</td>
     `;
     tr.addEventListener('click', () => fillForm(d.id, data));
@@ -259,6 +266,7 @@ saveBtn.addEventListener('click', async () => {
   const role = roleEl.value;
   const code = codeEl.value.trim();
   const plan = planEl.value;
+  const bonus = parseInt(bonusEl.value, 10) || 0;
   const name = nameEl.value.trim();
 
   if (!email || !code || !name) {
@@ -281,7 +289,7 @@ saveBtn.addEventListener('click', async () => {
       return;
     }
 
-    const agentData = { email, '密碼': password, '角色': role, '售價方案': plan, '顯示名稱': name };
+    const agentData = { email, '密碼': password, '角色': role, '售價方案': plan, '獎金': bonus, '顯示名稱': name };
     const isNew = !existingByEmail;
 
     // 既有記錄的推薦碼改變了 → 舊文件要刪掉，資料搬到新推薦碼底下
