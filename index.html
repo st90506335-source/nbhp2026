@@ -148,6 +148,12 @@
     text-decoration: none;
   }
   .query-link:hover { text-decoration: underline; }
+  .table-scroll { overflow-x: auto; }
+  #all-list-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  #all-list-table th, #all-list-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  #all-list-table th { color: var(--muted); font-weight: 600; }
+  #all-list-table td.num { text-align: right; }
+  #all-list-table tr.out { color: var(--muted); }
   #original-price {
     text-align: right;
     font-size: 24px;
@@ -311,6 +317,18 @@
   <div id="msg" class="msg"></div>
 
   <a class="query-link" href="query.html">查詢我的訂購紀錄</a>
+  <a class="query-link" href="#" id="show-all-link">全部清單一次看</a>
+
+  <div id="all-list-section" style="display:none; margin-top:16px;">
+    <div class="table-scroll">
+      <table id="all-list-table">
+        <thead>
+          <tr><th>No.</th><th>型號</th><th>種類</th><th class="num">金額</th><th class="num">剩餘</th></tr>
+        </thead>
+        <tbody id="all-list-rows"></tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 <script type="module">
@@ -387,6 +405,9 @@ const phoneEl = document.getElementById('phone-input');
 const noteEl = document.getElementById('note-input');
 const submitBtn = document.getElementById('submit-btn');
 const msgEl = document.getElementById('msg');
+const showAllLinkEl = document.getElementById('show-all-link');
+const allListSectionEl = document.getElementById('all-list-section');
+const allListRowsEl = document.getElementById('all-list-rows');
 
 const categoryLabel = (cats) => (cats && cats.length ? cats.join('、') : '—');
 
@@ -507,8 +528,9 @@ async function loadItems() {
   for (const item of items) {
     const opt = document.createElement('option');
     opt.value = item.no;
-    const soldOut = item.available <= 0 ? '（已售完）' : `（剩 ${item.available}）`;
-    opt.textContent = `No.${item.no} - ${item.model} ${soldOut}`;
+    const soldOut = item.available <= 0 ? '已售完' : `剩 ${item.available}`;
+    const price = priceFor(item, agent.plan);
+    opt.textContent = `No.${item.no} - ${item.model}（${categoryLabel(item.category)}｜NT$${price.toLocaleString()}｜${soldOut}）`;
     selectEl.appendChild(opt);
   }
 
@@ -516,6 +538,27 @@ async function loadItems() {
     selectEl.value = prevSelectedNo;
     selected = items.find((i) => i.no === prevSelectedNo) || null;
     if (selected) renderDetails(selected);
+  }
+
+  if (allListSectionEl.style.display !== 'none') {
+    renderAllList();
+  }
+}
+
+function renderAllList() {
+  allListRowsEl.innerHTML = '';
+  for (const item of items) {
+    const tr = document.createElement('tr');
+    if (item.available <= 0) tr.className = 'out';
+    const price = priceFor(item, agent.plan);
+    tr.innerHTML = `
+      <td>${item.no}</td>
+      <td>${item.model}</td>
+      <td>${categoryLabel(item.category)}</td>
+      <td class="num">NT$ ${price.toLocaleString()}</td>
+      <td class="num">${item.available <= 0 ? '已售完' : item.available}</td>
+    `;
+    allListRowsEl.appendChild(tr);
   }
 }
 
@@ -543,6 +586,19 @@ selectEl.addEventListener('change', () => {
 
 bagCheckboxEl.addEventListener('change', () => {
   if (selected) updatePriceSummary(selected);
+});
+
+showAllLinkEl.addEventListener('click', (e) => {
+  e.preventDefault();
+  const showing = allListSectionEl.style.display !== 'none';
+  if (showing) {
+    allListSectionEl.style.display = 'none';
+    showAllLinkEl.textContent = '全部清單一次看';
+  } else {
+    renderAllList();
+    allListSectionEl.style.display = 'block';
+    showAllLinkEl.textContent = '收起全部清單';
+  }
 });
 
 nameEl.addEventListener('input', updateSubmitState);
