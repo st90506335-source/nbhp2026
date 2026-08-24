@@ -148,6 +148,65 @@
     text-decoration: none;
   }
   .query-link:hover { text-decoration: underline; }
+  #filter-panel {
+    margin-top: 12px;
+    padding: 12px 14px;
+    background: #f8f9fb;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px;
+  }
+  .filter-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .filter-label {
+    color: var(--muted);
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 400;
+    margin: 0;
+    font-size: 13px;
+  }
+  .filter-chip input { width: auto; }
+  #filter-price {
+    width: auto;
+    padding: 4px 8px;
+    font-size: 13px;
+    display: inline-block;
+  }
+  #toast {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    width: 40vw;
+    min-width: 220px;
+    transform: translate(-50%, -50%) scale(0.95);
+    background: rgba(209, 36, 47, 0.85);
+    color: #fff;
+    padding: 20px 24px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 700;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    z-index: 1000;
+    text-align: center;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+  }
+  #toast.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
   .table-scroll { overflow-x: auto; }
   #all-list-table { width: 100%; border-collapse: collapse; font-size: 12px; }
   #all-list-table th, #all-list-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
@@ -274,6 +333,44 @@
   </p>
   <p class="sub" style="margin-top:-8px;">目前使用推薦碼：<strong id="current-code-label"></strong>（<a href="#" id="switch-code-link" style="color:var(--accent);">更換推薦碼</a>）</p>
   <div id="sticky-header-wrapper" class="ai-style-change-1">
+
+  <div id="filter-panel">
+    <label style="display:flex; align-items:center; gap:6px; font-weight:400; margin:0 0 8px;">
+      <input type="checkbox" id="filter-instock" style="width:auto;"> 只顯示有庫存
+    </label>
+
+    <div class="filter-row">
+      <span class="filter-label">分類</span>
+      <label class="filter-chip"><input type="checkbox" class="filter-category" value="電競">電競</label>
+      <label class="filter-chip"><input type="checkbox" class="filter-category" value="學生機">學生機</label>
+      <label class="filter-chip"><input type="checkbox" class="filter-category" value="商務機">商務機</label>
+    </div>
+
+    <div class="filter-row">
+      <span class="filter-label">價格</span>
+      <select id="filter-price">
+        <option value="">全部</option>
+        <option value="under10k">1萬以下</option>
+        <option value="10k-20k">1萬～2萬</option>
+        <option value="over20k">2萬以上</option>
+      </select>
+    </div>
+
+    <div class="filter-row">
+      <span class="filter-label">螢幕尺寸</span>
+      <span id="filter-lcd-options"></span>
+    </div>
+
+    <div class="filter-row">
+      <span class="filter-label">年份</span>
+      <span id="filter-year-options"></span>
+    </div>
+
+    <div class="filter-row">
+      <span class="filter-label">顯示卡</span>
+      <span id="filter-gpu-options"></span>
+    </div>
+  </div>
 
   <label for="model-select">選擇機種</label>
   <select id="model-select">
@@ -412,6 +509,11 @@ const msgEl = document.getElementById('msg');
 const showAllLinkEl = document.getElementById('show-all-link');
 const allListSectionEl = document.getElementById('all-list-section');
 const allListRowsEl = document.getElementById('all-list-rows');
+const filterInstockEl = document.getElementById('filter-instock');
+const filterPriceEl = document.getElementById('filter-price');
+const filterLcdOptionsEl = document.getElementById('filter-lcd-options');
+const filterYearOptionsEl = document.getElementById('filter-year-options');
+const filterGpuOptionsEl = document.getElementById('filter-gpu-options');
 
 const categoryLabel = (cats) => (cats && cats.length ? cats.join('、') : '—');
 
@@ -520,16 +622,73 @@ function showMsg(text, ok) {
   msgEl.className = 'msg show ' + (ok ? 'ok' : 'err');
 }
 
-async function loadItems() {
-  const snap = await getDocs(notebooksCol);
-  items = snap.docs
-    .map((d) => ({ ref: d.ref, ...d.data() }))
-    .sort((a, b) => a.no - b.no);
-  loadingEl.style.display = 'none';
+function lcdBucket(item) {
+  const n = parseFloat(item.lcd);
+  return Number.isFinite(n) ? Math.floor(n) : null;
+}
 
+const GPU_BUCKET_ORDER = ['NVIDIA 獨立顯卡', 'AMD', 'Intel 內顯'];
+function gpuBucket(item) {
+  const gpu = (item.gpu || '').toLowerCase();
+  if (!gpu) return null;
+  if (gpu.includes('nvidia')) return 'NVIDIA 獨立顯卡';
+  if (gpu.includes('amd')) return 'AMD';
+  if (gpu.includes('intel')) return 'Intel 內顯';
+  return '其他';
+}
+
+function buildFilterOptions() {
+  const lcdSizes = [...new Set(items.map(lcdBucket).filter((v) => v != null))].sort((a, b) => a - b);
+  filterLcdOptionsEl.innerHTML = lcdSizes
+    .map((size) => `<label class="filter-chip"><input type="checkbox" class="filter-lcd" value="${size}">${size}吋</label>`)
+    .join('');
+  filterLcdOptionsEl.querySelectorAll('.filter-lcd').forEach((el) => el.addEventListener('change', applyFilters));
+
+  const years = [...new Set(items.map((i) => i.year).filter((v) => v != null))].sort((a, b) => b - a);
+  filterYearOptionsEl.innerHTML = years
+    .map((y) => `<label class="filter-chip"><input type="checkbox" class="filter-year" value="${y}">${y}</label>`)
+    .join('');
+  filterYearOptionsEl.querySelectorAll('.filter-year').forEach((el) => el.addEventListener('change', applyFilters));
+
+  const gpuBuckets = [...new Set(items.map(gpuBucket).filter((v) => v != null))]
+    .sort((a, b) => GPU_BUCKET_ORDER.indexOf(a) - GPU_BUCKET_ORDER.indexOf(b));
+  filterGpuOptionsEl.innerHTML = gpuBuckets
+    .map((g) => `<label class="filter-chip"><input type="checkbox" class="filter-gpu" value="${g}">${g}</label>`)
+    .join('');
+  filterGpuOptionsEl.querySelectorAll('.filter-gpu').forEach((el) => el.addEventListener('change', applyFilters));
+}
+
+function priceBucketMatch(price, bucket) {
+  if (bucket === 'under10k') return price < 10000;
+  if (bucket === '10k-20k') return price >= 10000 && price <= 20000;
+  if (bucket === 'over20k') return price > 20000;
+  return true; // '' = 全部
+}
+
+function getFilteredItems() {
+  const instockOnly = filterInstockEl.checked;
+  const selectedCategories = [...document.querySelectorAll('.filter-category:checked')].map((el) => el.value);
+  const priceBucket = filterPriceEl.value;
+  const selectedLcds = [...document.querySelectorAll('.filter-lcd:checked')].map((el) => parseInt(el.value, 10));
+  const selectedYears = [...document.querySelectorAll('.filter-year:checked')].map((el) => parseInt(el.value, 10));
+  const selectedGpus = [...document.querySelectorAll('.filter-gpu:checked')].map((el) => el.value);
+
+  return items.filter((item) => {
+    if (instockOnly && item.available <= 0) return false;
+    if (selectedCategories.length && !(item.category || []).some((c) => selectedCategories.includes(c))) return false;
+    if (!priceBucketMatch(priceFor(item, agent), priceBucket)) return false;
+    if (selectedLcds.length && !selectedLcds.includes(lcdBucket(item))) return false;
+    if (selectedYears.length && !selectedYears.includes(item.year)) return false;
+    if (selectedGpus.length && !selectedGpus.includes(gpuBucket(item))) return false;
+    return true;
+  });
+}
+
+function renderModelOptions() {
+  const filtered = getFilteredItems();
   const prevSelectedNo = selected ? selected.no : null;
   selectEl.innerHTML = '<option value="">請選擇...</option>';
-  for (const item of items) {
+  for (const item of filtered) {
     const opt = document.createElement('option');
     opt.value = item.no;
     const soldOut = item.available <= 0 ? '已售完' : `剩 ${item.available}`;
@@ -538,11 +697,51 @@ async function loadItems() {
     selectEl.appendChild(opt);
   }
 
-  if (prevSelectedNo != null) {
+  if (prevSelectedNo != null && filtered.some((i) => i.no === prevSelectedNo)) {
     selectEl.value = prevSelectedNo;
-    selected = items.find((i) => i.no === prevSelectedNo) || null;
-    if (selected) renderDetails(selected);
+  } else {
+    selected = null;
+    selectEl.value = '';
+    photoEl.style.display = 'none';
+    originalPriceEl.style.display = 'none';
+    detailsEl.style.display = 'none';
+    memorySectionEl.style.display = 'none';
+    bagSectionEl.style.display = 'none';
+    priceSummaryEl.style.display = 'none';
   }
+}
+
+let toastTimer = null;
+function showToast(text) {
+  const toastEl = document.getElementById('toast');
+  toastEl.textContent = text;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2500);
+}
+
+function applyFilters() {
+  renderModelOptions();
+  if (allListSectionEl.style.display !== 'none') renderAllList();
+  if (getFilteredItems().length === 0) {
+    showToast('沒有符合條件的商品');
+  }
+}
+
+async function loadItems() {
+  const snap = await getDocs(notebooksCol);
+  items = snap.docs
+    .map((d) => ({ ref: d.ref, ...d.data() }))
+    .sort((a, b) => a.no - b.no);
+  loadingEl.style.display = 'none';
+
+  if (!filterLcdOptionsEl.dataset.built) {
+    buildFilterOptions();
+    filterLcdOptionsEl.dataset.built = '1';
+  }
+
+  renderModelOptions();
+  if (selected) renderDetails(selected);
 
   if (allListSectionEl.style.display !== 'none') {
     renderAllList();
@@ -550,8 +749,9 @@ async function loadItems() {
 }
 
 function renderAllList() {
+  const filtered = getFilteredItems();
   allListRowsEl.innerHTML = '';
-  for (const item of items) {
+  for (const item of filtered) {
     const tr = document.createElement('tr');
     if (item.available <= 0) tr.className = 'out';
     const price = priceFor(item, agent);
@@ -591,6 +791,10 @@ selectEl.addEventListener('change', () => {
 bagCheckboxEl.addEventListener('change', () => {
   if (selected) updatePriceSummary(selected);
 });
+
+filterInstockEl.addEventListener('change', applyFilters);
+filterPriceEl.addEventListener('change', applyFilters);
+document.querySelectorAll('.filter-category').forEach((el) => el.addEventListener('change', applyFilters));
 
 showAllLinkEl.addEventListener('click', (e) => {
   e.preventDefault();
@@ -744,5 +948,6 @@ if (savedAgent) {
   gateCodeEl.focus();
 }
 </script>
+<div id="toast"></div>
 </body>
 </html>

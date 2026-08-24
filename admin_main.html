@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HP 筆電出清系統導覽</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card-bg: #ffffff;
+    --text: #1d2129;
+    --muted: #6b7280;
+    --border: #e2e5ea;
+    --accent: #0f62fe;
+    --accent-hover: #0043ce;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    padding: 40px 16px;
+  }
+  .wrap { width: 100%; max-width: 640px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 24px; }
+  h2 { font-size: 14px; color: var(--muted); margin: 28px 0 10px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .link-card {
+    display: block;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 10px;
+    text-decoration: none;
+    color: var(--text);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .link-card:hover { border-color: var(--accent); }
+  .link-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .link-title .arrow { color: var(--accent); margin-left: 4px; }
+  .link-desc { font-size: 13px; color: var(--muted); }
+  .link-url { font-size: 12px; color: var(--muted); margin-top: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+  .badge.public { background: #dafbe1; color: #1a7f37; }
+  .badge.login { background: #fef3c7; color: #9a6700; }
+  .badge.admin { background: #ffebe9; color: #d1242f; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>HP 筆電出清系統導覽</h1>
+  <p class="sub">所有頁面的入口，方便收藏這一頁就好</p>
+
+  <h2>客戶端</h2>
+
+  <a class="link-card" href="index.html">
+    <div class="link-title">HP 筆電出清訂購<span class="badge public">需要推薦碼</span></div>
+    <div class="link-desc">選機種、選記憶體/筆電包、送出訂購</div>
+    <div class="link-url">index.html</div>
+  </a>
+
+  <a class="link-card" href="query.html">
+    <div class="link-title">訂購紀錄查詢<span class="badge public">需要電話</span></div>
+    <div class="link-desc">用電話查自己的訂單，可自助取消（限訂購中狀態）</div>
+    <div class="link-url">query.html</div>
+  </a>
+
+  <h2>後台管理</h2>
+
+  <a class="link-card" href="admin_orders.html">
+    <div class="link-title">訂單管理<span class="badge login">需登入</span></div>
+    <div class="link-desc">super_admin 看全部訂單並可改狀態；sales／inventory 唯讀看自己推薦碼底下的訂單</div>
+    <div class="link-url">admin_orders.html</div>
+  </a>
+
+  <a class="link-card" href="admin_inventory.html">
+    <div class="link-title">庫存管理<span class="badge login">需登入</span></div>
+    <div class="link-desc">super_admin／inventory 可用，貼 CSV 批次改庫存，附商品清單參考</div>
+    <div class="link-url">admin_inventory.html</div>
+  </a>
+
+  <a class="link-card" href="admin_agents.html">
+    <div class="link-title">代理人管理<span class="badge admin">僅 super_admin</span></div>
+    <div class="link-desc">管理推薦碼、售價方案、獎金、角色（密碼/角色欄位僅供記錄）</div>
+    <div class="link-url">admin_agents.html</div>
+  </a>
+</div>
+</body>
+</html>
