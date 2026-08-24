@@ -372,10 +372,14 @@ function ordersColFor(phone) {
   return collection(db, "hp_notebooks_order", normalizePhone(phone), "orders");
 }
 
-const PRICE_FIELD_BY_PLAN = { A: 'price_a', B: 'final_price', C: 'price_c' };
+const PRICE_FIELD_BY_PLAN = { A: 'price_a', B: 'final_price' };
 
-function priceFor(item, plan) {
-  return item[PRICE_FIELD_BY_PLAN[plan] || 'final_price'] ?? 0;
+// 方案 C 沒有固定加價，是每個代理人自訂的「獎金」：最終售價 + agent.bonus
+function priceFor(item, agentInfo) {
+  if (agentInfo.plan === 'C') {
+    return (item.final_price ?? 0) + (agentInfo.bonus ?? 0);
+  }
+  return item[PRICE_FIELD_BY_PLAN[agentInfo.plan] || 'final_price'] ?? 0;
 }
 
 let agent = null;     // { code, plan, name }
@@ -444,7 +448,7 @@ function renderDetails(item) {
     <dt>HD</dt><dd>${item.storage || '—'}</dd>
     <dt>鍵盤</dt><dd>${item.keyboard || '—'}</dd>
     <dt>顏色</dt><dd>${item.color || '—'}</dd>
-    <dt>售價</dt><dd class="ai-style-change-1 dazzling-effect">NT$ ${priceFor(item, agent.plan).toLocaleString()}</dd>
+    <dt>售價</dt><dd class="ai-style-change-1 dazzling-effect">NT$ ${priceFor(item, agent).toLocaleString()}</dd>
     <dt>適合種類</dt><dd>${categoryLabel(item.category)}</dd>
     <dt>總庫存</dt><dd>${item.quantity}</dd>
     <dt>剩餘可訂購</dt><dd class="available ${availClass}">${item.available}</dd>
@@ -493,7 +497,7 @@ function getBagSelection() {
 function updatePriceSummary(item) {
   const { amount: memoryAmount } = getMemorySelection();
   const { amount: bagAmount } = getBagSelection();
-  const machineAmount = priceFor(item, agent.plan);
+  const machineAmount = priceFor(item, agent);
   const total = machineAmount + memoryAmount + bagAmount;
   priceSummaryEl.style.display = 'grid';
   priceSummaryEl.innerHTML = `
@@ -529,7 +533,7 @@ async function loadItems() {
     const opt = document.createElement('option');
     opt.value = item.no;
     const soldOut = item.available <= 0 ? '已售完' : `剩 ${item.available}`;
-    const price = priceFor(item, agent.plan);
+    const price = priceFor(item, agent);
     opt.textContent = `No.${item.no} - ${item.model}（${categoryLabel(item.category)}｜NT$${price.toLocaleString()}｜${soldOut}）`;
     selectEl.appendChild(opt);
   }
@@ -550,7 +554,7 @@ function renderAllList() {
   for (const item of items) {
     const tr = document.createElement('tr');
     if (item.available <= 0) tr.className = 'out';
-    const price = priceFor(item, agent.plan);
+    const price = priceFor(item, agent);
     tr.innerHTML = `
       <td>${item.no}</td>
       <td>${item.model}</td>
@@ -614,7 +618,7 @@ submitBtn.addEventListener('click', async () => {
   const itemRef = selected.ref;
   const { spec: memorySpec, amount: memoryAmount } = getMemorySelection();
   const { checked: bagChecked, amount: bagAmount } = getBagSelection();
-  const machineAmount = priceFor(selected, agent.plan);
+  const machineAmount = priceFor(selected, agent);
   const totalAmount = machineAmount + memoryAmount + bagAmount;
 
   if (normalizePhone(phone).length < 10) {
@@ -699,7 +703,7 @@ async function tryEnterCode(code) {
       return;
     }
     const data = snap.data();
-    agent = { code: trimmed, plan: data['售價方案'], name: data['顯示名稱'] };
+    agent = { code: trimmed, plan: data['售價方案'], bonus: data['獎金'] ?? 0, name: data['顯示名稱'] };
     localStorage.setItem(AGENT_STORAGE_KEY, JSON.stringify(agent));
     enterOrderCard();
     await loadItems();
