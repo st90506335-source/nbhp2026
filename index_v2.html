@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <link rel="shortcut icon" type="image/x-icon" href="favicon.ico">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HP 筆電出清訂購（v2 實驗版：瀏覽紀錄）</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card-bg: #ffffff;
+    --text: #1d2129;
+    --muted: #6b7280;
+    --border: #e2e5ea;
+    --accent: #0f62fe;
+    --accent-hover: #0043ce;
+    --ok: #1a7f37;
+    --err: #d1242f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    padding: 40px 16px;
+  }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    width: 100%;
+    max-width: 520px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  h1 {
+    font-size: 20px;
+    margin: 0 0 4px;
+  }
+  .sub {
+    color: var(--muted);
+    font-size: 13px;
+    margin: 0 0 24px;
+  }
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin: 16px 0 6px;
+  }
+  select, input {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--text);
+  }
+  select:focus, input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .details {
+    margin-top: 16px;
+    padding: 14px 16px;
+    background: #f8f9fb;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    row-gap: 6px;
+    column-gap: 12px;
+  }
+  .details dt { color: var(--muted); }
+  .details dd { margin: 0; text-align: right; font-weight: 600; }
+  .details dd.available.ok { color: var(--ok); }
+  .details dd.available.out { color: var(--err); }
+  button {
+    width: 100%;
+    margin-top: 24px;
+    padding: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  button:hover { background: var(--accent-hover); }
+  button:disabled {
+    background: #b9bec7;
+    cursor: not-allowed;
+  }
+  .msg {
+    margin-top: 16px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    display: none;
+  }
+  .msg.show { display: block; }
+  .msg.ok { background: #dafbe1; color: var(--ok); }
+  .msg.err { background: #ffebe9; color: var(--err); }
+  .placeholder { color: var(--muted); font-size: 13px; }
+  .memory-slot-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .memory-slot-row label {
+    margin: 0;
+    font-weight: 400;
+    color: var(--muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .memory-slot-row select { margin: 0; }
+  .price-summary dd.total { color: var(--accent); font-size: 15px; }
+  textarea {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--text);
+    font-family: inherit;
+    resize: vertical;
+    min-height: 60px;
+  }
+  textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .query-link {
+    display: block;
+    text-align: center;
+    margin-top: 20px;
+    font-size: 13px;
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .query-link:hover { text-decoration: underline; }
+  #filter-panel {
+    margin-top: 12px;
+    padding: 12px 14px;
+    background: #f8f9fb;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px;
+  }
+  .filter-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .filter-label {
+    color: var(--muted);
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 400;
+    margin: 0;
+    font-size: 13px;
+  }
+  .filter-chip input { width: auto; }
+  #filter-price {
+    width: auto;
+    padding: 4px 8px;
+    font-size: 13px;
+    display: inline-block;
+  }
+  #toast {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    width: 40vw;
+    min-width: 220px;
+    transform: translate(-50%, -50%) scale(0.95);
+    background: rgba(209, 36, 47, 0.85);
+    color: #fff;
+    padding: 20px 24px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 700;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    z-index: 1000;
+    text-align: center;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+  }
+  #toast.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  .table-scroll { overflow-x: auto; }
+  #all-list-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  #all-list-table th, #all-list-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  #all-list-table th { color: var(--muted); font-weight: 600; }
+  #all-list-table td.num { text-align: right; }
+  #all-list-table tr.out { color: var(--muted); }
+  #original-price {
+    text-align: right;
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--err);
+    text-decoration: line-through;
+    margin-top: 12px;
+  }
+
+  .ai-style-change-1 {
+  body& {
+    background-image: url("https://image.slidesdocs.com/responsive-images/background/3d-rendered-digital-circuitry-of-a-cpu-board-powerpoint-background_b7ccbf53bd__960_540.jpg");
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+  }
+}
+
+.ai-style-change-1 {
+  div#sticky-header-wrapper& {
+    position: sticky;
+    top: 0px;
+    z-index: 1000;
+    background-color: white;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgb(238, 238, 238);
+  }
+}
+
+.ai-style-change-1 {
+  .details dd& {
+    color: rgb(0, 119, 190);
+    font-size: 22px;
+  }
+}
+
+</style>
+
+<style>
+
+.ai-style-change-1 {
+  .details dd& {
+    color: rgb(0, 119, 190);
+    font-size: 22px;
+    text-shadow: rgba(0, 0, 0, 0.2) 1px 1px 2px;
+    padding: 0px;
+    border-radius: 4px;
+    display: block;
+    background-color: transparent;
+    paint-order: normal;
+  }
+}
+
+  @keyframes ocean-glow {
+    0% { text-shadow: 0 0 5px #00d4ff, 0 0 10px #00d4ff; }
+    50% { text-shadow: 0 0 20px #0077be, 0 0 30px #0077be, 0 0 40px #0077be; }
+    100% { text-shadow: 0 0 5px #00d4ff, 0 0 10px #00d4ff; }
+  }
+  
+  .dazzling-effect {
+    background: linear-gradient(90deg, #0077be, #00d4ff, #ffffff, #00d4ff, #0077be);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shine 3s linear infinite, ocean-glow 2s ease-in-out infinite;
+    font-weight: 800 !important;
+    display: inline-block;
+  }
+
+  @keyframes shine {
+    to { background-position: 200% center; }
+  }
+</style>
+
+</head>
+<body class="ai-style-change-1">
+<div id="gate-card" class="card">
+  <h1>HP 筆電出清訂購</h1>
+  <p class="sub">請輸入訂購代碼以繼續</p>
+  <label for="gate-code-input">訂購代碼</label>
+  <input id="gate-code-input" type="text" placeholder="請輸入訂購代碼">
+  <button id="gate-submit-btn">進入訂購頁</button>
+  <div id="gate-msg" class="msg"></div>
+</div>
+
+<div id="order-card" class="card" style="display:none;">
+  <h1>HP 筆電出清訂購</h1>
+  <p class="sub ai-style-change-1">
+    <div style="background: #fff4f4; border-left: 4px solid #ef4444; padding: 12px 16px; margin-bottom: 20px; border-radius: 4px; color: #b91c1c; font-weight: 600;">
+      ⚠️ 此網頁請勿廣傳！這裡是僅供認識的朋友購買筆電下單使用
+    </div>
+<ul style="list-style: none; padding: 0; margin: 0; color: #4b5563; font-size: 14px; line-height: 1.7;">
+      <li style="margin-bottom: 12px; display: flex; align-items: flex-start;">
+        <span style="background: #e5e7eb; color: #374151; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 12px; margin-right: 10px; flex-shrink: 0; margin-top: 2px;">1</span>
+        <span>選擇機種，已售完則不能再選囉！</span>
+      </li>
+      <li style="margin-bottom: 12px; display: flex; align-items: flex-start;">
+        <span style="background: #e5e7eb; color: #374151; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 12px; margin-right: 10px; flex-shrink: 0; margin-top: 2px;">2</span>
+        <span>選擇記憶體：由於最近記憶體飆漲如黃金，採選配方式。建議：<br>
+          • 上網：8GB 足夠<br>
+          • 上網 + 文書：12GB<br>
+          • 上網 + 文書 + 輕量遊戲：16GB 以上
+        </span>
+      </li>
+      <li style="margin-bottom: 12px; display: flex; align-items: flex-start;">
+        <span style="background: #e5e7eb; color: #374151; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 12px; margin-right: 10px; flex-shrink: 0; margin-top: 2px;">3</span>
+        <span>下單後不代表確定買到（庫存變動快），<strong>請務必 Line 我確認</strong>。</span>
+      </li>
+      <li style="margin-bottom: 12px; display: flex; align-items: flex-start;">
+        <span style="background: #e5e7eb; color: #374151; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 12px; margin-right: 10px; flex-shrink: 0; margin-top: 2px;">4</span>
+        <span>訂單保留七天。若狀態未轉為「完成訂購」，七天後將被取消。</span>
+      </li>
+    <li>
+        <span style="background: #e5e7eb; color: #374151; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 12px; margin-right: 10px; flex-shrink: 0; margin-top: 2px;">5</span>
+        <span>付款後才算完成訂單哦</span>
+      </li></ul>
+  </p>
+  <p class="sub" style="margin-top:-8px;">目前使用推薦碼：<strong id="current-code-label"></strong>（<a href="#" id="switch-code-link" style="color:var(--accent);">更換推薦碼</a>）</p>
+  <div id="sticky-header-wrapper" class="ai-style-change-1">
+
+  <div id="filter-panel">
+    <label style="display:flex; align-items:center; gap:6px; font-weight:400; margin:0 0 8px;">
+      <input type="checkbox" id="filter-instock" style="width:auto;"> 只顯示有庫存
+    </label>
+
+    <div class="filter-row">
+      <span class="filter-label">分類</span>
+      <label class="filter-chip"><input type="checkbox" class="filter-category" value="電競">電競</label>
+      <label class="filter-chip"><input type="checkbox" class="filter-category" value="學生機">學生機</label>
+      <label class="filter-chip"><input type="checkbox" class="filter-category" value="商務機">商務機</label>
+    </div>
+
+    <div class="filter-row">
+      <span class="filter-label">價格</span>
+      <select id="filter-price">
+        <option value="">全部</option>
+        <option value="under10k">1萬以下</option>
+        <option value="10k-20k">1萬～2萬</option>
+        <option value="over20k">2萬以上</option>
+      </select>
+    </div>
+
+    <div class="filter-row">
+      <span class="filter-label">螢幕尺寸</span>
+      <span id="filter-lcd-options"></span>
+    </div>
+
+    <div class="filter-row">
+      <span class="filter-label">年份</span>
+      <span id="filter-year-options"></span>
+    </div>
+
+    <div class="filter-row">
+      <span class="filter-label">顯示卡</span>
+      <span id="filter-gpu-options"></span>
+    </div>
+  </div>
+
+  <label for="model-select">選擇機種</label>
+  <select id="model-select">
+    <option value="">請選擇...</option>
+  </select>
+
+  </div>
+  
+
+  <img id="item-photo" style="display:none; width:100%; border-radius:8px; margin-top:16px; border:1px solid var(--border);">
+  <div id="original-price" style="display:none;"></div>
+  <div id="details" class="details" style="display:none;"></div>
+  <p id="loading" class="placeholder">載入機種資料中...</p>
+
+  <div id="memory-section" style="display:none;">
+    <label>記憶體加購（每個插槽獨立選擇，選填，建議最少8GB）</label>
+    <div id="memory-slots"></div>
+  </div>
+
+  <div id="bag-section" style="display:none; margin-top:12px;">
+    <label style="display:flex; align-items:center; gap:8px; font-weight:400;">
+      <input type="checkbox" id="bag-checkbox" style="width:auto;">
+      筆電包 +$300
+    </label>
+  </div>
+
+  <div id="price-summary" class="details price-summary" style="display:none;"></div>
+
+  <label for="name-input">姓名</label>
+  <input id="name-input" type="text" placeholder="請輸入姓名">
+
+  <label for="phone-input">電話</label>
+  <input id="phone-input" type="tel" placeholder="請輸入電話">
+
+  <label for="note-input">備註(有勾選筆電包請輸入編號、若未輸入隨機配送)</label>
+  <textarea id="note-input" placeholder="選填"></textarea>
+  <img src="photos/BAG.jpeg" alt="筆電包編號" style="width:100%; margin-top:8px; border-radius:4px; border:1px solid var(--border);">
+
+  <button id="submit-btn" disabled>送出訂購</button>
+
+  <div id="msg" class="msg"></div>
+
+  <a class="query-link" href="query.html">查詢我的訂購紀錄</a>
+  <a class="query-link" href="#" id="show-all-link">全部清單一次看</a>
+
+  <div id="all-list-section" style="display:none; margin-top:16px;">
+    <div class="table-scroll">
+      <table id="all-list-table">
+        <thead>
+          <tr><th>No.</th><th>型號</th><th>種類</th><th class="num">金額</th><th class="num">剩餘</th></tr>
+        </thead>
+        <tbody id="all-list-rows"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import {
+  getFirestore,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  addDoc,
+  updateDoc,
+  increment,
+  runTransaction,
+  serverTimestamp,
+} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCkIuQSBoc5bzJ9Tz3PhdUQL3_gIlFmVck",
+  authDomain: "project-527b8c4a-cfeb-4c25-85c.firebaseapp.com",
+  projectId: "project-527b8c4a-cfeb-4c25-85c",
+  storageBucket: "project-527b8c4a-cfeb-4c25-85c.firebasestorage.app",
+  messagingSenderId: "499931946357",
+  appId: "1:499931946357:web:958006c31148fda215c73c",
+  measurementId: "G-9M69E9604R"
+};
+
+// Firestore Native mode 資料庫（另建，因為 nb202608 是 MongoDB 相容 Enterprise edition，不支援原生 API）
+const DATABASE_ID = "nb2026hp";
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app, DATABASE_ID);
+
+const notebooksCol = collection(db, "hp_notebooks");
+
+function normalizePhone(raw) {
+  return (raw || '').replace(/\D/g, '');
+}
+
+const MEMORY_PRICES = { 0: 0, 8: 2400, 12: 3600, 16: 4800 };
+const BAG_PRICE = 300;
+
+function ordersColFor(phone) {
+  return collection(db, "hp_notebooks_order", normalizePhone(phone), "orders");
+}
+
+// --- v2 實驗：瀏覽紀錄（IP 靠 ipify.org 第三方查詢，設備資訊純用 navigator.userAgent 判斷） ---
+const pageViewsCol = collection(db, "hp_page_views");
+
+function parseDevice(ua) {
+  let os = 'Unknown OS';
+  if (/iPad/.test(ua)) os = 'iPad';
+  else if (/iPhone/.test(ua)) os = 'iPhone';
+  else if (/Android/.test(ua)) os = 'Android';
+  else if (/Macintosh/.test(ua)) os = 'Mac';
+  else if (/Windows/.test(ua)) os = 'Windows';
+  else if (/Linux/.test(ua)) os = 'Linux';
+
+  let browser = 'Unknown Browser';
+  if (/Edg\//.test(ua)) browser = 'Edge';
+  else if (/CriOS/.test(ua)) browser = 'Chrome(iOS)';
+  else if (/Chrome\//.test(ua)) browser = 'Chrome';
+  else if (/Firefox\//.test(ua)) browser = 'Firefox';
+  else if (/Safari\//.test(ua) && !/Chrome/.test(ua)) browser = 'Safari';
+
+  return `${os} / ${browser}`;
+}
+
+async function fetchIp() {
+  try {
+    const res = await fetch('https://api.ipify.org?format=json');
+    if (!res.ok) return '';
+    const data = await res.json();
+    return data.ip || '';
+  } catch (e) {
+    console.error('ipify lookup failed (可能被隱私外掛擋掉，不影響下單流程)', e);
+    return '';
+  }
+}
+
+// fire-and-forget：不 await，不擋畫面，失敗也不影響訂購流程
+function logPageView() {
+  (async () => {
+    const ip = await fetchIp();
+    try {
+      await addDoc(pageViewsCol, {
+        created_at: serverTimestamp(),
+        '推薦碼': agent ? agent.code : '',
+        device: parseDevice(navigator.userAgent),
+        ip,
+      });
+      console.log('[v2 debug] page view logged, ip=', ip || '(空，可能被擋)');
+    } catch (e) {
+      console.error('page view log failed', e);
+    }
+  })();
+}
+
+// fire-and-forget：機種被選取時 +1，並樂觀更新畫面數字
+function bumpViewCount(item) {
+  item.view_count = (item.view_count || 0) + 1;
+  updateDoc(item.ref, { view_count: increment(1) }).catch((e) => console.error('view_count bump failed', e));
+}
+
+const PRICE_FIELD_BY_PLAN = { A: 'price_a', B: 'final_price' };
+
+// 方案 C 沒有固定加價，是每個代理人自訂的「獎金」：最終售價 + agent.bonus
+function priceFor(item, agentInfo) {
+  if (agentInfo.plan === 'C') {
+    return (item.final_price ?? 0) + (agentInfo.bonus ?? 0);
+  }
+  return item[PRICE_FIELD_BY_PLAN[agentInfo.plan] || 'final_price'] ?? 0;
+}
+
+let agent = null;     // { code, plan, name }
+let items = [];       // [{ ref, no, model, quantity, available, year, cpu_cores, price_a, final_price, price_c, category }]
+let selected = null;
+
+const gateCardEl = document.getElementById('gate-card');
+const orderCardEl = document.getElementById('order-card');
+const gateCodeEl = document.getElementById('gate-code-input');
+const gateSubmitBtn = document.getElementById('gate-submit-btn');
+const gateMsgEl = document.getElementById('gate-msg');
+const currentCodeLabelEl = document.getElementById('current-code-label');
+const switchCodeLinkEl = document.getElementById('switch-code-link');
+
+const selectEl = document.getElementById('model-select');
+const photoEl = document.getElementById('item-photo');
+const originalPriceEl = document.getElementById('original-price');
+const detailsEl = document.getElementById('details');
+const loadingEl = document.getElementById('loading');
+const memorySectionEl = document.getElementById('memory-section');
+const memorySlotsEl = document.getElementById('memory-slots');
+const bagSectionEl = document.getElementById('bag-section');
+const bagCheckboxEl = document.getElementById('bag-checkbox');
+const priceSummaryEl = document.getElementById('price-summary');
+const nameEl = document.getElementById('name-input');
+const phoneEl = document.getElementById('phone-input');
+const noteEl = document.getElementById('note-input');
+const submitBtn = document.getElementById('submit-btn');
+const msgEl = document.getElementById('msg');
+const showAllLinkEl = document.getElementById('show-all-link');
+const allListSectionEl = document.getElementById('all-list-section');
+const allListRowsEl = document.getElementById('all-list-rows');
+const filterInstockEl = document.getElementById('filter-instock');
+const filterPriceEl = document.getElementById('filter-price');
+const filterLcdOptionsEl = document.getElementById('filter-lcd-options');
+const filterYearOptionsEl = document.getElementById('filter-year-options');
+const filterGpuOptionsEl = document.getElementById('filter-gpu-options');
+
+const categoryLabel = (cats) => (cats && cats.length ? cats.join('、') : '—');
+
+const PHONE_STORAGE_KEY = 'hp_nb_phone';
+const savedPhone = localStorage.getItem(PHONE_STORAGE_KEY);
+if (savedPhone) phoneEl.value = savedPhone;
+phoneEl.addEventListener('input', () => {
+  localStorage.setItem(PHONE_STORAGE_KEY, phoneEl.value);
+});
+
+function renderPhoto(item) {
+  photoEl.style.display = 'block';
+  photoEl.src = `photos/${item.no}.jpeg`;
+  photoEl.onerror = () => { photoEl.style.display = 'none'; };
+}
+
+function renderOriginalPrice(item) {
+  if (item.original_price) {
+    originalPriceEl.style.display = 'block';
+    originalPriceEl.textContent = `原價 NT$ ${item.original_price.toLocaleString()}`;
+  } else {
+    originalPriceEl.style.display = 'none';
+  }
+}
+
+function renderDetails(item) {
+  detailsEl.style.display = 'grid';
+  const availClass = item.available > 0 ? 'ok' : 'out';
+  detailsEl.innerHTML = `
+    <dt>年份</dt><dd>${item.year ?? '—'}</dd>
+    <dt>LCD(吋)</dt><dd>${item.lcd || '—'}</dd>
+    <dt>CPU核心數</dt><dd>${item.cpu_cores ?? '—'}</dd>
+    <dt>顯示卡</dt><dd>${item.gpu || '—'}</dd>
+    <dt>HD</dt><dd>${item.storage || '—'}</dd>
+    <dt>鍵盤</dt><dd>${item.keyboard || '—'}</dd>
+    <dt>顏色</dt><dd>${item.color || '—'}</dd>
+    <dt>售價</dt><dd class="ai-style-change-1 dazzling-effect">NT$ ${priceFor(item, agent).toLocaleString()}</dd>
+    <dt>適合種類</dt><dd>${categoryLabel(item.category)}</dd>
+    <dt>總庫存</dt><dd>${item.quantity}</dd>
+    <dt>剩餘可訂購</dt><dd class="available ${availClass}">${item.available}</dd>
+    <dt>已選取次數</dt><dd>${item.view_count ?? 0}</dd>
+  `;
+}
+
+function renderMemorySlots(item) {
+  const slots = item.memory_slots || 0;
+  memorySlotsEl.innerHTML = '';
+  if (slots <= 0) {
+    memorySectionEl.style.display = 'none';
+    return;
+  }
+  memorySectionEl.style.display = 'block';
+  for (let i = 0; i < slots; i++) {
+    const row = document.createElement('div');
+    row.className = 'memory-slot-row';
+    row.innerHTML = `
+      <label>插槽 ${i + 1}</label>
+      <select data-memory-slot="${i}">
+        <option value="0">不加購</option>
+        <option value="8">8GB（+$2,400）</option>
+        <option value="12">12GB（+$3,600）</option>
+        <option value="16">16GB（+$4,800）</option>
+      </select>
+    `;
+    row.querySelector('select').addEventListener('change', () => updatePriceSummary(item));
+    memorySlotsEl.appendChild(row);
+  }
+}
+
+function getMemorySelection() {
+  const selects = [...memorySlotsEl.querySelectorAll('select[data-memory-slot]')];
+  const chosen = selects.map((s) => parseInt(s.value, 10)).filter((v) => v > 0);
+  return {
+    spec: chosen.join('+'),
+    amount: chosen.reduce((sum, gb) => sum + (MEMORY_PRICES[gb] || 0), 0),
+  };
+}
+
+function getBagSelection() {
+  const checked = bagCheckboxEl.checked;
+  return { checked, amount: checked ? BAG_PRICE : 0 };
+}
+
+function updatePriceSummary(item) {
+  const { amount: memoryAmount } = getMemorySelection();
+  const { amount: bagAmount } = getBagSelection();
+  const machineAmount = priceFor(item, agent);
+  const total = machineAmount + memoryAmount + bagAmount;
+  priceSummaryEl.style.display = 'grid';
+  priceSummaryEl.innerHTML = `
+    <dt>機器金額</dt><dd>NT$ ${machineAmount.toLocaleString()}</dd>
+    <dt>記憶體加購</dt><dd>NT$ ${memoryAmount.toLocaleString()}</dd>
+    <dt>筆電包</dt><dd>NT$ ${bagAmount.toLocaleString()}</dd>
+    <dt>訂購總金額</dt><dd class="total">NT$ ${total.toLocaleString()}</dd>
+  `;
+}
+
+function updateSubmitState() {
+  const ready = selected && selected.available > 0 && nameEl.value.trim() &&
+    normalizePhone(phoneEl.value).length >= 10;
+  submitBtn.disabled = !ready;
+  submitBtn.textContent = selected && selected.available <= 0 ? '已售完' : '送出訂購';
+}
+
+function showMsg(text, ok) {
+  msgEl.textContent = text;
+  msgEl.className = 'msg show ' + (ok ? 'ok' : 'err');
+}
+
+function lcdBucket(item) {
+  const n = parseFloat(item.lcd);
+  return Number.isFinite(n) ? Math.floor(n) : null;
+}
+
+const GPU_BUCKET_ORDER = ['NVIDIA 獨立顯卡', 'AMD', 'Intel 內顯'];
+function gpuBucket(item) {
+  const gpu = (item.gpu || '').toLowerCase();
+  if (!gpu) return null;
+  if (gpu.includes('nvidia')) return 'NVIDIA 獨立顯卡';
+  if (gpu.includes('amd')) return 'AMD';
+  if (gpu.includes('intel')) return 'Intel 內顯';
+  return '其他';
+}
+
+function buildFilterOptions() {
+  const lcdSizes = [...new Set(items.map(lcdBucket).filter((v) => v != null))].sort((a, b) => a - b);
+  filterLcdOptionsEl.innerHTML = lcdSizes
+    .map((size) => `<label class="filter-chip"><input type="checkbox" class="filter-lcd" value="${size}">${size}吋</label>`)
+    .join('');
+  filterLcdOptionsEl.querySelectorAll('.filter-lcd').forEach((el) => el.addEventListener('change', applyFilters));
+
+  const years = [...new Set(items.map((i) => i.year).filter((v) => v != null))].sort((a, b) => b - a);
+  filterYearOptionsEl.innerHTML = years
+    .map((y) => `<label class="filter-chip"><input type="checkbox" class="filter-year" value="${y}">${y}</label>`)
+    .join('');
+  filterYearOptionsEl.querySelectorAll('.filter-year').forEach((el) => el.addEventListener('change', applyFilters));
+
+  const gpuBuckets = [...new Set(items.map(gpuBucket).filter((v) => v != null))]
+    .sort((a, b) => GPU_BUCKET_ORDER.indexOf(a) - GPU_BUCKET_ORDER.indexOf(b));
+  filterGpuOptionsEl.innerHTML = gpuBuckets
+    .map((g) => `<label class="filter-chip"><input type="checkbox" class="filter-gpu" value="${g}">${g}</label>`)
+    .join('');
+  filterGpuOptionsEl.querySelectorAll('.filter-gpu').forEach((el) => el.addEventListener('change', applyFilters));
+}
+
+function priceBucketMatch(price, bucket) {
+  if (bucket === 'under10k') return price < 10000;
+  if (bucket === '10k-20k') return price >= 10000 && price <= 20000;
+  if (bucket === 'over20k') return price > 20000;
+  return true; // '' = 全部
+}
+
+function getFilteredItems() {
+  const instockOnly = filterInstockEl.checked;
+  const selectedCategories = [...document.querySelectorAll('.filter-category:checked')].map((el) => el.value);
+  const priceBucket = filterPriceEl.value;
+  const selectedLcds = [...document.querySelectorAll('.filter-lcd:checked')].map((el) => parseInt(el.value, 10));
+  const selectedYears = [...document.querySelectorAll('.filter-year:checked')].map((el) => parseInt(el.value, 10));
+  const selectedGpus = [...document.querySelectorAll('.filter-gpu:checked')].map((el) => el.value);
+
+  return items.filter((item) => {
+    if (instockOnly && item.available <= 0) return false;
+    if (selectedCategories.length && !(item.category || []).some((c) => selectedCategories.includes(c))) return false;
+    if (!priceBucketMatch(priceFor(item, agent), priceBucket)) return false;
+    if (selectedLcds.length && !selectedLcds.includes(lcdBucket(item))) return false;
+    if (selectedYears.length && !selectedYears.includes(item.year)) return false;
+    if (selectedGpus.length && !selectedGpus.includes(gpuBucket(item))) return false;
+    return true;
+  });
+}
+
+function renderModelOptions() {
+  const filtered = getFilteredItems();
+  const prevSelectedNo = selected ? selected.no : null;
+  selectEl.innerHTML = '<option value="">請選擇...</option>';
+  for (const item of filtered) {
+    const opt = document.createElement('option');
+    opt.value = item.no;
+    const soldOut = item.available <= 0 ? '已售完' : `剩 ${item.available}`;
+    const price = priceFor(item, agent);
+    opt.textContent = `No.${item.no} - ${item.model}（${categoryLabel(item.category)}｜NT$${price.toLocaleString()}｜${soldOut}）`;
+    selectEl.appendChild(opt);
+  }
+
+  if (prevSelectedNo != null && filtered.some((i) => i.no === prevSelectedNo)) {
+    selectEl.value = prevSelectedNo;
+  } else {
+    selected = null;
+    selectEl.value = '';
+    photoEl.style.display = 'none';
+    originalPriceEl.style.display = 'none';
+    detailsEl.style.display = 'none';
+    memorySectionEl.style.display = 'none';
+    bagSectionEl.style.display = 'none';
+    priceSummaryEl.style.display = 'none';
+  }
+}
+
+let toastTimer = null;
+function showToast(text) {
+  const toastEl = document.getElementById('toast');
+  toastEl.textContent = text;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2500);
+}
+
+function applyFilters() {
+  renderModelOptions();
+  if (allListSectionEl.style.display !== 'none') renderAllList();
+  if (getFilteredItems().length === 0) {
+    showToast('沒有符合條件的商品');
+  }
+}
+
+async function loadItems() {
+  const snap = await getDocs(notebooksCol);
+  items = snap.docs
+    .map((d) => ({ ref: d.ref, ...d.data() }))
+    .sort((a, b) => a.no - b.no);
+  loadingEl.style.display = 'none';
+
+  if (!filterLcdOptionsEl.dataset.built) {
+    buildFilterOptions();
+    filterLcdOptionsEl.dataset.built = '1';
+  }
+
+  renderModelOptions();
+  if (selected) renderDetails(selected);
+
+  if (allListSectionEl.style.display !== 'none') {
+    renderAllList();
+  }
+}
+
+function renderAllList() {
+  const filtered = getFilteredItems();
+  allListRowsEl.innerHTML = '';
+  for (const item of filtered) {
+    const tr = document.createElement('tr');
+    if (item.available <= 0) tr.className = 'out';
+    const price = priceFor(item, agent);
+    tr.innerHTML = `
+      <td>${item.no}</td>
+      <td>${item.model}</td>
+      <td>${categoryLabel(item.category)}</td>
+      <td class="num">NT$ ${price.toLocaleString()}</td>
+      <td class="num">${item.available <= 0 ? '已售完' : item.available}</td>
+    `;
+    allListRowsEl.appendChild(tr);
+  }
+}
+
+selectEl.addEventListener('change', () => {
+  const no = parseInt(selectEl.value, 10);
+  selected = items.find((i) => i.no === no) || null;
+  if (selected) {
+    bumpViewCount(selected);
+    renderPhoto(selected);
+    renderOriginalPrice(selected);
+    renderDetails(selected);
+    renderMemorySlots(selected);
+    bagSectionEl.style.display = 'block';
+    updatePriceSummary(selected);
+  } else {
+    photoEl.style.display = 'none';
+    originalPriceEl.style.display = 'none';
+    detailsEl.style.display = 'none';
+    memorySectionEl.style.display = 'none';
+    bagSectionEl.style.display = 'none';
+    priceSummaryEl.style.display = 'none';
+  }
+  msgEl.className = 'msg';
+  updateSubmitState();
+});
+
+bagCheckboxEl.addEventListener('change', () => {
+  if (selected) updatePriceSummary(selected);
+});
+
+filterInstockEl.addEventListener('change', applyFilters);
+filterPriceEl.addEventListener('change', applyFilters);
+document.querySelectorAll('.filter-category').forEach((el) => el.addEventListener('change', applyFilters));
+
+showAllLinkEl.addEventListener('click', (e) => {
+  e.preventDefault();
+  const showing = allListSectionEl.style.display !== 'none';
+  if (showing) {
+    allListSectionEl.style.display = 'none';
+    showAllLinkEl.textContent = '全部清單一次看';
+  } else {
+    renderAllList();
+    allListSectionEl.style.display = 'block';
+    showAllLinkEl.textContent = '收起全部清單';
+  }
+});
+
+nameEl.addEventListener('input', updateSubmitState);
+phoneEl.addEventListener('input', updateSubmitState);
+
+submitBtn.addEventListener('click', async () => {
+  if (!selected) return;
+  if (!window.confirm('確定訂購？')) return;
+
+  const name = nameEl.value.trim();
+  const phone = phoneEl.value.trim();
+  const note = noteEl.value.trim();
+  const itemRef = selected.ref;
+  const { spec: memorySpec, amount: memoryAmount } = getMemorySelection();
+  const { checked: bagChecked, amount: bagAmount } = getBagSelection();
+  const machineAmount = priceFor(selected, agent);
+  const totalAmount = machineAmount + memoryAmount + bagAmount;
+
+  if (normalizePhone(phone).length < 10) {
+    showMsg('請輸入至少 10 碼的手機號碼', false);
+    return;
+  }
+
+  submitBtn.disabled = true;
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(itemRef);
+      const available = snap.data().available;
+      if (!(available > 0)) {
+        throw new Error('SOLD_OUT');
+      }
+      tx.update(itemRef, { available: available - 1 });
+      const orderRef = doc(ordersColFor(phone));
+      tx.set(orderRef, {
+        no: selected.no,
+        model: selected.model,
+        '姓名': name,
+        '電話': phone,
+        status: 'ordered',
+        created_at: serverTimestamp(),
+        '記憶體規格': memorySpec,
+        '記憶體金額': memoryAmount,
+        '筆電包': bagChecked ? 'Y' : 'N',
+        '筆電包金額': bagAmount,
+        '機器金額': machineAmount,
+        '總金額': totalAmount,
+        '備註': note,
+        '推薦碼': agent.code,
+        '售價方案': agent.plan,
+      });
+    });
+
+    showMsg('訂購成功！', true);
+    nameEl.value = '';
+    phoneEl.value = '';
+    noteEl.value = '';
+    renderMemorySlots(selected);
+    bagCheckboxEl.checked = false;
+    updatePriceSummary(selected);
+    await loadItems();
+    updateSubmitState();
+  } catch (e) {
+    if (e.message === 'SOLD_OUT') {
+      showMsg('庫存不足，已售完', false);
+    } else {
+      showMsg('訂購失敗，請稍後再試', false);
+      console.error(e);
+    }
+    await loadItems();
+    updateSubmitState();
+  }
+});
+
+const AGENT_STORAGE_KEY = 'hp_nb_agent';
+
+function showGateMsg(text) {
+  gateMsgEl.textContent = text;
+  gateMsgEl.className = 'msg show err';
+}
+
+function enterOrderCard() {
+  gateCardEl.style.display = 'none';
+  orderCardEl.style.display = 'block';
+  currentCodeLabelEl.textContent = agent.code;
+  logPageView();
+}
+
+async function tryEnterCode(code) {
+  const trimmed = (code || '').trim();
+  if (!trimmed) {
+    showGateMsg('請輸入訂購代碼');
+    return;
+  }
+  gateSubmitBtn.disabled = true;
+  try {
+    const snap = await getDoc(doc(db, 'hp_agents', trimmed));
+    if (!snap.exists()) {
+      showGateMsg('訂購代碼錯誤，請確認後再試');
+      return;
+    }
+    const data = snap.data();
+    agent = { code: trimmed, plan: data['售價方案'], bonus: data['獎金'] ?? 0, name: data['顯示名稱'] };
+    localStorage.setItem(AGENT_STORAGE_KEY, JSON.stringify(agent));
+    enterOrderCard();
+    await loadItems();
+  } catch (e) {
+    showGateMsg('查詢失敗，請稍後再試');
+    console.error(e);
+  } finally {
+    gateSubmitBtn.disabled = false;
+  }
+}
+
+gateSubmitBtn.addEventListener('click', () => tryEnterCode(gateCodeEl.value));
+gateCodeEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') tryEnterCode(gateCodeEl.value);
+});
+
+switchCodeLinkEl.addEventListener('click', (e) => {
+  e.preventDefault();
+  orderCardEl.style.display = 'none';
+  gateCardEl.style.display = 'block';
+  gateCodeEl.value = agent ? agent.code : '';
+  gateMsgEl.className = 'msg';
+  gateCodeEl.focus();
+  gateCodeEl.select();
+});
+
+const savedAgent = localStorage.getItem(AGENT_STORAGE_KEY);
+if (savedAgent) {
+  try {
+    agent = JSON.parse(savedAgent);
+    gateCodeEl.value = agent.code;
+    enterOrderCard();
+    loadItems();
+  } catch {
+    localStorage.removeItem(AGENT_STORAGE_KEY);
+  }
+} else {
+  gateCodeEl.focus();
+}
+</script>
+<div id="toast"></div>
+</body>
+</html>
