@@ -292,6 +292,7 @@
 <body class="ai-style-change-1">
 <div id="gate-card" class="card">
   <h1>HP 筆電出清訂購</h1>
+  <p class="sub">目前總瀏覽次數：<span id="total-views-line-1">—</span></p>
   <p class="sub">請輸入訂購代碼以繼續</p>
   <label for="gate-code-input">訂購代碼</label>
   <input id="gate-code-input" type="text" placeholder="請輸入訂購代碼">
@@ -301,6 +302,7 @@
 
 <div id="order-card" class="card" style="display:none;">
   <h1>HP 筆電出清訂購</h1>
+  <p class="sub">目前總瀏覽次數：<span id="total-views-line-2">—</span></p>
   <p class="sub ai-style-change-1">
     <div style="background: #fff4f4; border-left: 4px solid #ef4444; padding: 12px 16px; margin-bottom: 20px; border-radius: 4px; color: #b91c1c; font-weight: 600;">
       ⚠️ 此網頁請勿廣傳！這裡是僅供認識的朋友購買筆電下單使用
@@ -436,6 +438,10 @@ import {
   doc,
   getDoc,
   getDocs,
+  addDoc,
+  updateDoc,
+  setDoc,
+  increment,
   runTransaction,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
@@ -467,6 +473,106 @@ const BAG_PRICE = 300;
 
 function ordersColFor(phone) {
   return collection(db, "hp_notebooks_order", normalizePhone(phone), "orders");
+}
+
+// --- 瀏覽紀錄（IP 靠 ipify.org 第三方查詢，設備資訊純用 navigator.userAgent 判斷） ---
+const pageViewsCol = collection(db, "hp_page_views");
+const totalViewsStatRef = doc(db, "hp_stats", "page_views_total");
+const totalViewsLine1El = document.getElementById('total-views-line-1');
+const totalViewsLine2El = document.getElementById('total-views-line-2');
+
+function showTotalViews(n) {
+  totalViewsLine1El.textContent = n;
+  totalViewsLine2El.textContent = n;
+}
+
+async function loadTotalViews() {
+  try {
+    const snap = await getDoc(totalViewsStatRef);
+    showTotalViews(snap.exists() ? (snap.data().count ?? 0) : 0);
+  } catch (e) {
+    console.error('load total views failed', e);
+  }
+}
+
+// fire-and-forget：純數字統計 +1，不含任何個資，失敗也不影響訂購流程
+function bumpTotalViews() {
+  setDoc(totalViewsStatRef, { count: increment(1) }, { merge: true })
+    .then(loadTotalViews)
+    .catch((e) => console.error('bump total views failed', e));
+}
+
+loadTotalViews();
+
+function parseDevice(ua) {
+  let os = 'Unknown OS';
+  if (/iPad/.test(ua)) os = 'iPad';
+  else if (/iPhone/.test(ua)) os = 'iPhone';
+  else if (/Android/.test(ua)) os = 'Android';
+  else if (/Macintosh/.test(ua)) os = 'Mac';
+  else if (/Windows/.test(ua)) os = 'Windows';
+  else if (/Linux/.test(ua)) os = 'Linux';
+
+  let browser = 'Unknown Browser';
+  if (/Edg\//.test(ua)) browser = 'Edge';
+  else if (/CriOS/.test(ua)) browser = 'Chrome(iOS)';
+  else if (/Chrome\//.test(ua)) browser = 'Chrome';
+  else if (/Firefox\//.test(ua)) browser = 'Firefox';
+  else if (/Safari\//.test(ua) && !/Chrome/.test(ua)) browser = 'Safari';
+
+  return `${os} / ${browser}`;
+}
+
+async function fetchIp() {
+  try {
+    const res = await fetch('https://api.ipify.org?format=json');
+    if (!res.ok) return '';
+    const data = await res.json();
+    return data.ip || '';
+  } catch (e) {
+    console.error('ipify lookup failed (可能被隱私外掛擋掉，不影響下單流程)', e);
+    return '';
+  }
+}
+
+// 同一個訪客只查一次 IP，之後的紀錄（進站、選取機種）都共用同一個結果，不用每次都打 ipify
+let ipPromise = null;
+function getIpCached() {
+  if (!ipPromise) ipPromise = fetchIp();
+  return ipPromise;
+}
+
+// item 為 null：單純「進站」紀錄；有帶 item：「選取了哪台機種」的紀錄
+async function logEvent(item) {
+  const ip = await getIpCached();
+  const payload = {
+    created_at: serverTimestamp(),
+    '推薦碼': agent ? agent.code : '',
+    device: parseDevice(navigator.userAgent),
+    ip,
+  };
+  if (item) {
+    payload.no = item.no;
+    payload.model = item.model;
+  }
+  try {
+    await addDoc(pageViewsCol, payload);
+  } catch (e) {
+    console.error('log event failed', e);
+  }
+}
+
+// fire-and-forget：不 await，不擋畫面，失敗也不影響訂購流程
+function logPageView() {
+  logEvent(null);
+  bumpTotalViews();
+}
+
+// fire-and-forget：機種被選取時 +1，並樂觀更新畫面數字，同時記一筆「哪台被看過」
+function bumpViewCount(item) {
+  item.view_count = (item.view_count || 0) + 1;
+  updateDoc(item.ref, { view_count: increment(1) }).catch((e) => console.error('view_count bump failed', e));
+  logEvent(item);
 }
 
 const PRICE_FIELD_BY_PLAN = { A: 'price_a', B: 'final_price' };
@@ -554,6 +660,7 @@ function renderDetails(item) {
     <dt>適合種類</dt><dd>${categoryLabel(item.category)}</dd>
     <dt>總庫存</dt><dd>${item.quantity}</dd>
     <dt>剩餘可訂購</dt><dd class="available ${availClass}">${item.available}</dd>
+    <dt>已選取次數</dt><dd>${item.view_count ?? 0}</dd>
   `;
 }
 
@@ -770,6 +877,7 @@ selectEl.addEventListener('change', () => {
   const no = parseInt(selectEl.value, 10);
   selected = items.find((i) => i.no === no) || null;
   if (selected) {
+    bumpViewCount(selected);
     renderPhoto(selected);
     renderOriginalPrice(selected);
     renderDetails(selected);
@@ -891,6 +999,7 @@ function enterOrderCard() {
   gateCardEl.style.display = 'none';
   orderCardEl.style.display = 'block';
   currentCodeLabelEl.textContent = agent.code;
+  logPageView();
 }
 
 async function tryEnterCode(code) {

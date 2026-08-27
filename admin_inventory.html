@@ -137,6 +137,7 @@
           <th class="num">金額</th>
           <th>適合種類</th>
           <th class="num">剩餘可訂購</th>
+          <th class="num">瀏覽次數</th>
         </tr>
       </thead>
       <tbody id="product-rows"></tbody>
@@ -359,6 +360,7 @@ async function loadProductList(plan) {
       <td class="num">NT$ ${(item[priceField] ?? 0).toLocaleString()}</td>
       <td>${categoryLabel(item.category)}</td>
       <td class="num ${outClass}">${item.available}</td>
+      <td class="num">${item.view_count ?? 0}</td>
     `;
     productRowsEl.appendChild(tr);
   }

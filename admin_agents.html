@@ -68,6 +68,7 @@
   table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
   th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
   th { color: var(--muted); font-weight: 600; }
+  td.num, th.num { text-align: right; }
   tr.clickable { cursor: pointer; }
   tr.clickable:hover { background: #f8f9fb; }
   .empty { color: var(--muted); font-size: 13px; padding: 12px 0; }
@@ -139,8 +140,9 @@
   <div id="msg" class="msg"></div>
 
   <h2>現有代理人</h2>
+  <p class="sub">總瀏覽次數：<strong id="total-views">—</strong></p>
   <table>
-    <thead><tr><th>推薦碼</th><th>Email</th><th>顯示名稱</th><th>售價方案</th><th>獎金</th><th>角色</th></tr></thead>
+    <thead><tr><th>推薦碼</th><th>Email</th><th>顯示名稱</th><th>售價方案</th><th>獎金</th><th>角色</th><th class="num">瀏覽次數</th></tr></thead>
     <tbody id="agent-rows"></tbody>
   </table>
   <p id="empty-state" class="empty" style="display:none;">目前沒有任何代理人</p>
@@ -162,6 +164,7 @@ import {
   getDocs,
   query,
   where,
+  getCountFromServer,
   setDoc,
   deleteDoc,
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
@@ -181,6 +184,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app, DATABASE_ID);
 const authClient = getAuth(app);
 const agentsCol = collection(db, 'hp_agents');
+const pageViewsCol = collection(db, 'hp_page_views');
 
 const loginView = document.getElementById('login-view');
 const deniedView = document.getElementById('denied-view');
@@ -202,6 +206,17 @@ const saveBtn = document.getElementById('save-btn');
 const msgEl = document.getElementById('msg');
 const agentRowsEl = document.getElementById('agent-rows');
 const emptyStateEl = document.getElementById('empty-state');
+const totalViewsEl = document.getElementById('total-views');
+
+async function countViewsForCode(code) {
+  try {
+    const snap = await getCountFromServer(query(pageViewsCol, where('推薦碼', '==', code)));
+    return snap.data().count;
+  } catch (e) {
+    console.error('count views failed for', code, e);
+    return null;
+  }
+}
 
 function showMsg(text, ok) {
   msgEl.textContent = text;
@@ -243,8 +258,16 @@ async function loadAgents() {
   const snap = await getDocs(agentsCol);
   agentRowsEl.innerHTML = '';
   emptyStateEl.style.display = snap.empty ? 'block' : 'none';
-  snap.forEach((d) => {
+
+  const totalSnap = await getCountFromServer(pageViewsCol);
+  totalViewsEl.textContent = totalSnap.data().count;
+
+  const docs = snap.docs;
+  const viewCounts = await Promise.all(docs.map((d) => countViewsForCode(d.id)));
+
+  docs.forEach((d, i) => {
     const data = d.data();
+    const views = viewCounts[i];
     const tr = document.createElement('tr');
     tr.className = 'clickable';
     tr.innerHTML = `
@@ -254,6 +277,7 @@ async function loadAgents() {
       <td>${data['售價方案'] || ''}</td>
       <td>${data['售價方案'] === 'C' ? (data['獎金'] ?? 0) : '—'}</td>
       <td>${data['角色'] || ''}</td>
+      <td class="num">${views ?? '—'}</td>
     `;
     tr.addEventListener('click', () => fillForm(d.id, data));
     agentRowsEl.appendChild(tr);

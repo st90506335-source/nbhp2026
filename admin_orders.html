@@ -118,7 +118,7 @@
       </div>
     </div>
     <h1>訂單管理</h1>
-    <p class="sub">共 <span id="order-count">0</span> 筆</p>
+    <p class="sub">共 <span id="order-count">0</span> 筆　｜　我的推薦碼瀏覽次數：<strong id="my-view-count">—</strong></p>
 
     <div class="filter-row">
       <label id="status-filter-label" style="margin:0;">狀態篩選</label>
@@ -169,11 +169,13 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import {
   getFirestore,
+  collection,
   collectionGroup,
   query,
   where,
   orderBy,
   getDocs,
+  getCountFromServer,
   doc,
   runTransaction,
   serverTimestamp,
@@ -193,6 +195,7 @@ const DATABASE_ID = "nb2026hp";
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app, DATABASE_ID);
 const authClient = getAuth(app);
+const pageViewsCol = collection(db, 'hp_page_views');
 
 const STATUS_LABEL = { ordered: '訂購中', confirmed: '已成立', completed: '已完成', cancelled: '取消' };
 
@@ -213,6 +216,7 @@ const refreshBtn = document.getElementById('refresh-btn');
 const orderRowsEl = document.getElementById('order-rows');
 const emptyStateEl = document.getElementById('empty-state');
 const orderCountEl = document.getElementById('order-count');
+const myViewCountEl = document.getElementById('my-view-count');
 const msgEl = document.getElementById('msg');
 
 function showMsg(text, ok) {
@@ -396,6 +400,19 @@ onAuthStateChanged(authClient, async (user) => {
   whoRoleEl.textContent = { super_admin: 'super_admin', sales: 'sales', inventory: 'inventory' }[role];
   inventoryLinkEl.style.display = (role === 'super_admin' || role === 'inventory') ? 'inline' : 'none';
   agentsLinkEl.style.display = role === 'super_admin' ? 'inline' : 'none';
+
+  if (currentCode) {
+    try {
+      const snap = await getCountFromServer(query(pageViewsCol, where('推薦碼', '==', currentCode)));
+      myViewCountEl.textContent = snap.data().count;
+    } catch (e) {
+      myViewCountEl.textContent = '—';
+      console.error('my view count failed', e);
+    }
+  } else {
+    myViewCountEl.textContent = '—';
+  }
+
   await loadOrders();
 });
 </script>
