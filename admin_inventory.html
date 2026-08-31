@@ -111,18 +111,24 @@
     <a href="#" id="logout-link">登出</a>
   </div>
   <h1>庫存管理</h1>
-  <p class="sub">貼上 CSV，每行「編號,數量」，數量是要設定的庫存總數（不是異動量）</p>
 
-  <label for="csv-input">CSV 內容</label>
-  <textarea id="csv-input" placeholder="70,2&#10;15,0&#10;23,5"></textarea>
-  <p class="hint">逐行處理：能更新的先更新，會導致負庫存的行會被擋下並列出原因，不影響其他行</p>
+  <div id="csv-section">
+    <p class="sub">貼上 CSV，每行「編號,數量」，數量是要設定的庫存總數（不是異動量）</p>
 
-  <button id="apply-btn" class="full-btn">套用更新</button>
+    <label for="csv-input">CSV 內容</label>
+    <textarea id="csv-input" placeholder="70,2&#10;15,0&#10;23,5"></textarea>
+    <p class="hint">逐行處理：能更新的先更新，會導致負庫存的行會被擋下並列出原因，不影響其他行</p>
 
-  <div id="msg" class="msg"></div>
-  <div id="result-list" class="result-list"></div>
+    <button id="apply-btn" class="full-btn">套用更新</button>
 
-  <h2>目前商品清單</h2>
+    <div id="msg" class="msg"></div>
+    <div id="result-list" class="result-list"></div>
+  </div>
+
+  <div class="topbar" style="margin-top:28px; margin-bottom:0;">
+    <h2 style="margin:0;">目前商品清單</h2>
+    <button id="export-csv-btn">匯出成CSV</button>
+  </div>
   <p class="sub">金額欄依你自己的售價方案（<span id="my-plan"></span>）顯示</p>
   <div class="table-scroll">
     <table>
@@ -176,7 +182,8 @@ const DATABASE_ID = "nb2026hp";
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app, DATABASE_ID);
 const authClient = getAuth(app);
-const ALLOWED_ROLES = ['super_admin', 'inventory'];
+const ALLOWED_ROLES = ['super_admin', 'inventory', 'sales'];
+const CSV_EDIT_ROLES = ['super_admin', 'inventory'];
 
 const loginView = document.getElementById('login-view');
 const deniedView = document.getElementById('denied-view');
@@ -193,10 +200,22 @@ const msgEl = document.getElementById('msg');
 const resultListEl = document.getElementById('result-list');
 const myPlanEl = document.getElementById('my-plan');
 const productRowsEl = document.getElementById('product-rows');
+const csvSectionEl = document.getElementById('csv-section');
+const exportCsvBtn = document.getElementById('export-csv-btn');
 
-const PRICE_FIELD_BY_PLAN = { A: 'price_a', B: 'final_price', C: 'price_c' };
+const PRICE_FIELD_BY_PLAN = { A: 'price_a', B: 'final_price' };
 const categoryLabel = (cats) => (cats && cats.length ? cats.join('、') : '—');
 let myPlan = 'B';
+let myBonus = 0;
+let currentItems = [];
+
+// 方案 C 沒有固定加價，是每個代理人自訂的「獎金」：最終售價 + myBonus，跟 index.html 的 priceFor() 邏輯一致
+function priceFor(item, plan, bonus) {
+  if (plan === 'C') {
+    return (item.final_price ?? 0) + (bonus ?? 0);
+  }
+  return item[PRICE_FIELD_BY_PLAN[plan] || 'final_price'] ?? 0;
+}
 
 function showMsg(text, ok) {
   msgEl.textContent = text;
@@ -332,19 +351,25 @@ onAuthStateChanged(authClient, async (user) => {
   mainView.style.display = 'block';
   whoEmailEl.textContent = user.email;
 
+  const canEdit = CSV_EDIT_ROLES.includes(tokenResult.claims.role);
+  csvSectionEl.style.display = canEdit ? 'block' : 'none';
+
   const code = tokenResult.claims.code;
   if (code) {
     const agentSnap = await getDoc(doc(db, 'hp_agents', code));
-    if (agentSnap.exists()) myPlan = agentSnap.data()['售價方案'] || 'B';
+    if (agentSnap.exists()) {
+      myPlan = agentSnap.data()['售價方案'] || 'B';
+      myBonus = agentSnap.data()['獎金'] ?? 0;
+    }
   }
   myPlanEl.textContent = myPlan;
   await loadProductList(myPlan);
 });
 
 async function loadProductList(plan) {
-  const priceField = PRICE_FIELD_BY_PLAN[plan] || 'final_price';
   const snap = await getDocs(collection(db, 'hp_notebooks'));
   const items = snap.docs.map((d) => d.data()).sort((a, b) => a.no - b.no);
+  currentItems = items;
 
   productRowsEl.innerHTML = '';
   for (const item of items) {
@@ -357,7 +382,7 @@ async function loadProductList(plan) {
       <td class="num">${item.memory_slots ?? '—'}</td>
       <td class="num">${item.year ?? '—'}</td>
       <td class="num">${item.cpu_cores ?? '—'}</td>
-      <td class="num">NT$ ${(item[priceField] ?? 0).toLocaleString()}</td>
+      <td class="num">NT$ ${priceFor(item, plan, myBonus).toLocaleString()}</td>
       <td>${categoryLabel(item.category)}</td>
       <td class="num ${outClass}">${item.available}</td>
       <td class="num">${item.view_count ?? 0}</td>
@@ -365,6 +390,41 @@ async function loadProductList(plan) {
     productRowsEl.appendChild(tr);
   }
 }
+
+function csvEscape(value) {
+  const s = String(value ?? '');
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function exportProductListCsv() {
+  const headers = ['No.', '型號', '數量', '記憶體插槽數', '年份', 'CPU核心數', '金額', '適合種類', '剩餘可訂購', '瀏覽次數'];
+  const rows = currentItems.map((item) => [
+    item.no,
+    item.model,
+    item.quantity ?? '',
+    item.memory_slots ?? '',
+    item.year ?? '',
+    item.cpu_cores ?? '',
+    priceFor(item, myPlan, myBonus),
+    categoryLabel(item.category),
+    item.available,
+    item.view_count ?? 0,
+  ]);
+  const lines = [headers, ...rows].map((row) => row.map(csvEscape).join(','));
+  const csvContent = '﻿' + lines.join('\n');
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `商品清單_${myPlan}方案_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+exportCsvBtn.addEventListener('click', exportProductListCsv);
 </script>
 </body>
 </html>
